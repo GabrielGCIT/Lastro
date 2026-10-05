@@ -1,0 +1,1292 @@
+{% extends "base.html" %}
+
+{% block title %}Movimentação{% endblock %}
+{% block content %}
+
+<div id="loadingOverlay" class="d-none position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center"
+     style="background: rgba(0,0,0,0.85); z-index: 9999; backdrop-filter: blur(4px);">
+    <div class="text-center text-white">
+        <div class="spinner-border text-primary" style="width: 4rem; height: 4rem;" role="status"></div>
+        <h3 class="mt-4 fw-bold">{{ t('movimentacao.processando') }}</h3>
+        <p class="text-white-50">{{ t('movimentacao.validando') }}</p>
+    </div>
+</div>
+
+<div class="container fade-in" style="max-width: 700px; margin-top: 40px;">
+
+    <div class="text-center mb-4">
+        <h2 class="fw-bold text-dark"><i class="fa-solid fa-barcode me-2"></i>{{ t('movimentacao.titulo') }}</h2>
+        <p class="text-muted">{{ t('movimentacao.subtitulo') }}</p>
+    </div>
+
+    <div class="card card-custom border-0 shadow-lg overflow-hidden">
+
+        <div class="d-flex">
+            <button onclick="mudarModo('retirada')" id="tab-retirada"
+                class="btn w-50 py-3 fw-bold rounded-0"
+                style="background-color: #0d6efd; color: white; border: none;">
+                <i class="fa-solid fa-arrow-right-from-bracket me-2"></i>{{ t('movimentacao.tab_retirada') }}
+            </button>
+            <button onclick="mudarModo('devolucao')" id="tab-devolucao"
+                class="btn w-50 py-3 fw-bold rounded-0"
+                style="background-color: #f8f9fa; color: #6c757d; border-bottom: 2px solid #dee2e6;">
+                <i class="fa-solid fa-arrow-right-to-bracket me-2"></i>{{ t('movimentacao.tab_devolucao') }}
+            </button>
+        </div>
+
+        <div class="card-body p-4 p-md-5">
+
+            {# ── FORM RETIRADA ── #}
+            <div id="form-retirada">
+                <form action="{{ url_for('movimentacao.realizar_retirada') }}" method="POST"
+                      enctype="multipart/form-data" id="form-retirada-post">
+
+                    <div class="mb-4">
+                        <label class="form-label text-uppercase text-muted fw-bold small">{{ t('movimentacao.label_re') }}</label>
+                        <div class="input-group">
+                            <span class="input-group-text" id="re-status-icon">
+                                <i class="fa-solid fa-id-card text-muted"></i>
+                            </span>
+                            <input type="text" id="re_input" inputmode="numeric" pattern="[0-9]+"
+                                   class="form-control form-control-lg"
+                                   placeholder="{{ t('movimentacao.placeholder_re') }}" autocomplete="off" autofocus>
+                        </div>
+                        <!-- Card de confirmação (aparece dinamicamente) -->
+                        <div id="re-card" class="mt-2 d-none"></div>
+                        <!-- Input hidden que vai no POST -->
+                        <input type="hidden" name="re_colaborador" id="re_hidden">
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <label class="form-label text-uppercase text-muted fw-bold small mb-0">{{ t('movimentacao.label_serial_coletor') }}</label>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <input type="radio" class="btn-check" name="busca_modo_ret_ui" id="modo_pat_ret" autocomplete="off" checked>
+                                <label class="btn btn-outline-secondary" for="modo_pat_ret">
+                                    <i class="fa-solid fa-tag me-1"></i>{{ t('movimentacao.modo_patrimonio') }}
+                                </label>
+                                <input type="radio" class="btn-check" name="busca_modo_ret_ui" id="modo_serial_ret" autocomplete="off">
+                                <label class="btn btn-outline-secondary" for="modo_serial_ret">
+                                    <i class="fa-solid fa-barcode me-1"></i>{{ t('movimentacao.modo_serial') }}
+                                </label>
+                            </div>
+                        </div>
+                        <input type="hidden" name="busca_modo" id="busca_modo_ret" value="patrimonio">
+                        <div class="input-group">
+                            <span class="input-group-text bg-primary text-white border-0">
+                                <i class="fa-solid fa-barcode" id="icon_busca_ret"></i>
+                            </span>
+                            <input type="text" name="busca_valor"
+                                   id="busca_valor_ret"
+                                   class="form-control form-control-lg fw-bold text-uppercase"
+                                   placeholder="{{ t('movimentacao.placeholder_serial') }}" required>
+                        </div>
+                        <div id="coletor-card-ret" class="mt-2 d-none"></div>
+                        <div id="polling-ts-ret" style="display:none; font-size:0.65rem;" class="text-muted mt-1">
+                            <i class="fa-solid fa-circle-dot text-success me-1" style="font-size:0.5rem;"></i>
+                            <span id="polling-ts-ret-val"></span>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label text-uppercase text-muted fw-bold small">
+                            {{ t('movimentacao.label_foto_inicial') }}
+                            <span class="badge bg-secondary ms-1" style="font-size: 0.65em;">{{ t('label.opcional') }}</span>
+                        </label>
+                        <input type="file" name="foto_retirada"
+                               class="form-control" accept="image/*" capture="environment"
+                               id="foto_retirada_input">
+                        <div class="form-text">
+                            <i class="fa-solid fa-camera me-1"></i>
+                            {{ t('movimentacao.hint_foto_saida') }}
+                        </div>
+                        <div id="preview_retirada" class="mt-2 d-none">
+                            <img id="img_retirada" src="" alt="Preview" class="rounded border"
+                                 style="max-height: 160px; max-width: 100%;">
+                        </div>
+                    </div>
+
+                    {# Campos ocultos do checklist — preenchidos pelo JS antes do submit #}
+                    <input type="hidden" name="estado_visual"     id="hid_estado_visual"     value="">
+                    <input type="hidden" name="bateria_ok"        id="hid_bateria_ok"        value="">
+                    <input type="hidden" name="leitura_ok"        id="hid_leitura_ok"        value="">
+                    <input type="hidden" name="identificacao_ok"  id="hid_identificacao_ok"  value="">
+                    <input type="hidden" name="equipamento_limpo" id="hid_equipamento_limpo" value="">
+
+                    <div class="d-grid mt-4">
+                        <button type="button" id="btn-confirmar-saida"
+                                class="btn btn-dark btn-lg py-3 fw-bold"
+                                style="background-color: #0f172a;" disabled
+                                onclick="abrirChecklist()">
+                            {{ t('movimentacao.btn_confirmar_saida') }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            {# ── FORM DEVOLUÇÃO ── #}
+            <div id="form-devolucao" class="d-none">
+                <form action="{{ url_for('movimentacao.realizar_devolucao') }}" method="POST"
+                      enctype="multipart/form-data" id="form-devolucao-post"
+                      onsubmit="return interceptarDevolucao(event)">
+
+                    <div class="mb-4">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <label class="form-label text-uppercase text-muted fw-bold small mb-0">{{ t('movimentacao.label_serial_equip') }}</label>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <input type="radio" class="btn-check" name="busca_modo_dev_ui" id="modo_pat_dev" autocomplete="off" checked>
+                                <label class="btn btn-outline-secondary" for="modo_pat_dev">
+                                    <i class="fa-solid fa-tag me-1"></i>{{ t('movimentacao.modo_patrimonio') }}
+                                </label>
+                                <input type="radio" class="btn-check" name="busca_modo_dev_ui" id="modo_serial_dev" autocomplete="off">
+                                <label class="btn btn-outline-secondary" for="modo_serial_dev">
+                                    <i class="fa-solid fa-barcode me-1"></i>{{ t('movimentacao.modo_serial') }}
+                                </label>
+                            </div>
+                        </div>
+                        <input type="hidden" name="busca_modo" id="busca_modo_dev" value="patrimonio">
+                        <div class="input-group">
+                            <span class="input-group-text bg-warning text-dark border-0">
+                                <i class="fa-solid fa-barcode" id="icon_busca_dev"></i>
+                            </span>
+                            <input type="text" name="busca_valor"
+                                   id="busca_valor_dev"
+                                   class="form-control form-control-lg fw-bold text-uppercase"
+                                   placeholder="{{ t('movimentacao.placeholder_serial_dev') }}" required>
+                        </div>
+                        <div id="coletor-card-dev" class="mt-2 d-none"></div>
+                        <div id="polling-ts-dev" style="display:none; font-size:0.65rem;" class="text-muted mt-1">
+                            <i class="fa-solid fa-circle-dot text-success me-1" style="font-size:0.5rem;"></i>
+                            <span id="polling-ts-dev-val"></span>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label text-uppercase text-muted fw-bold small">{{ t('movimentacao.label_status_lacre') }}</label>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <input type="radio" class="btn-check" name="status_identificacao"
+                                       id="identificacao_ok" value="OK" checked
+                                       onchange="atualizarFotoRequired()">
+                                <label class="btn btn-outline-success w-100 py-3 fw-bold" for="identificacao_ok">
+                                    <i class="fa-solid fa-check-circle me-1"></i>{{ t('movimentacao.lacre_intacto') }}
+                                </label>
+                            </div>
+                            <div class="col-6">
+                                <input type="radio" class="btn-check" name="status_identificacao"
+                                       id="identificacao_rompida" value="ROMPIDO"
+                                       onchange="atualizarFotoRequired()">
+                                <label class="btn btn-outline-danger w-100 py-3 fw-bold" for="identificacao_rompida">
+                                    <i class="fa-solid fa-triangle-exclamation me-1"></i>{{ t('movimentacao.lacre_violado') }}
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# Toggle — Voltou Danificado #}
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="voltou_danificado"
+                                   id="voltou_danificado" onchange="toggleDanificado()" style="cursor:pointer;">
+                            <label class="form-check-label fw-bold" for="voltou_danificado"
+                                   style="cursor:pointer;">
+                                <i class="fa-solid fa-screwdriver-wrench me-1 text-warning"></i>
+                                {{ t('movimentacao.voltou_danificado') }}
+                            </label>
+                        </div>
+                        <div class="form-text">{{ t('movimentacao.hint_danificado') }}</div>
+                    </div>
+
+                    {# Área diagnóstico — visível quando danificado #}
+                    <div id="area_danificado" class="d-none border border-warning p-3 rounded bg-white mb-4">
+                        <p class="small text-warning fw-bold mb-3">
+                            <i class="fa-solid fa-triangle-exclamation me-1"></i>{{ t('movimentacao.label_descreva_defeito') }}
+                        </p>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">{{ t('movimentacao.label_o_que_acontece') }}</label>
+                            <select class="form-select" name="categoria_defeito" id="dev_cat_defeito"
+                                    onchange="carregarDetalhesDevol()">
+                                <option value="">Selecione...</option>
+                                <option value="FISICO">{{ t('movimentacao.defeito.fisico') }}</option>
+                                <option value="HARDWARE">{{ t('movimentacao.defeito.hardware') }}</option>
+                                <option value="SISTEMA">{{ t('movimentacao.defeito.sistema') }}</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small">{{ t('movimentacao.label_detalhe') }}</label>
+                            <select class="form-select" name="detalhe_defeito" id="dev_detalhe_defeito">
+                                <option value="">Selecione...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label small">{{ t('label.observacao') }}</label>
+                            <textarea class="form-control" name="descricao_problema" id="dev_desc_problema"
+                                      rows="2" placeholder="{{ t('movimentacao.placeholder_obs') }}"></textarea>
+                        </div>
+                    </div>
+
+                    {# Foto devolução — obrigatória se VIOLADO ou danificado, opcional se OK #}
+                    <div class="mb-4" id="foto-devolucao-div">
+                        <label class="form-label text-uppercase text-muted fw-bold small" id="foto_dev_label">
+                            {{ t('movimentacao.label_foto_devolucao') }}
+                            <span id="badge_foto_dev" class="badge bg-secondary ms-1"
+                                  style="font-size: 0.65em;">{{ t('label.opcional') }}</span>
+                        </label>
+                        <input type="file" name="foto_devolucao"
+                               class="form-control" accept="image/*" capture="environment"
+                               id="foto_devolucao_input">
+                        <div class="form-text" id="foto_dev_hint">
+                            <i class="fa-solid fa-camera me-1"></i>
+                            {{ t('movimentacao.hint_foto_devolucao') }}
+                        </div>
+                        <div id="aviso_foto_violado" class="alert alert-danger py-2 small mt-2 d-none">
+                            <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                            {{ t('movimentacao.aviso_foto_obrigatoria') }}
+                        </div>
+                        <div id="preview_devolucao" class="mt-2 d-none">
+                            <img id="img_devolucao" src="" alt="Preview" class="rounded border"
+                                 style="max-height: 160px; max-width: 100%;">
+                        </div>
+                    </div>
+
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-warning btn-lg py-3 fw-bold text-dark">
+                            {{ t('movimentacao.btn_confirmar_devolucao') }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="text-center mt-3 d-flex justify-content-center align-items-center gap-3 flex-wrap">
+        <a href="{{ url_for('movimentacao.operacao_inventario') }}" class="text-muted small text-decoration-none">
+            <i class="fa-solid fa-flag me-1"></i>{{ t('movimentacao.link_reportar') }}
+        </a>
+        <span class="text-muted small">·</span>
+        <button type="button" class="btn btn-link p-0 text-muted small text-decoration-none"
+                onclick="abrirModalCadastroCampo()">
+            <i class="fa-solid fa-user-plus me-1"></i>{{ t('movimentacao.link_cadastrar') }}
+        </button>
+    </div>
+
+</div>
+
+{# ── Modal: Cadastro em Campo ── #}
+<div class="modal fade" id="modalCadastroCampo" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" style="background-color: var(--mb-blue);">
+                <h5 class="modal-title text-white fw-bold">
+                    <i class="fa-solid fa-user-plus me-2"></i>{{ t('movimentacao.modal_cadastro_titulo') }}
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body">
+                <div class="alert alert-warning py-2 small mb-3">
+                    <i class="fa-solid fa-circle-info me-1"></i>
+                    {{ t('movimentacao.aviso_cadastro_rapido') }}
+                </div>
+
+                <div id="campo-erro" class="alert alert-danger py-2 small d-none"></div>
+                <div id="campo-sucesso" class="d-none text-center py-3">
+                    <i class="fa-solid fa-circle-check text-success fa-3x mb-3"></i>
+                    <h6 class="fw-bold" id="campo-sucesso-nome"></h6>
+                    <p class="text-muted small mb-0">{{ t('movimentacao.cadastro_sucesso') }}</p>
+                </div>
+
+                <div id="campo-form">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">{{ t('label.nome_completo') }} <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="campo-nome" placeholder="{{ t('movimentacao.placeholder_nome') }}" autocomplete="off">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">RE <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control font-monospace" id="campo-re"
+                               inputmode="numeric" pattern="[0-9]+" placeholder="{{ t('movimentacao.placeholder_re_numeros') }}">
+                        <div class="form-text">{{ t('movimentacao.hint_re') }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer" id="campo-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('btn.cancelar') }}</button>
+                <button type="button" class="btn btn-mb-action fw-bold" id="btn-salvar-campo" onclick="salvarCadastroCampo()">
+                    <i class="fa-solid fa-floppy-disk me-1"></i>{{ t('movimentacao.btn_cadastrar') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── Modal: Checklist de Entrega ── #}
+<div class="modal fade" id="modalChecklist" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" style="background-color: #0f172a;">
+                <h5 class="modal-title text-white fw-bold">
+                    <i class="fa-solid fa-clipboard-check me-2"></i>{{ t('checklist.titulo') }}
+                </h5>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">
+                    <i class="fa-solid fa-circle-info me-1"></i>
+                    {{ t('movimentacao.chk_instrucao') }}
+                </p>
+                <div class="vstack gap-2">
+
+                    <div class="form-check p-3 border rounded d-flex align-items-center gap-3" id="bloco_estado_visual">
+                        <input class="form-check-input chk-item flex-shrink-0" type="checkbox"
+                               id="chk_estado_visual" style="width:1.4em;height:1.4em;cursor:pointer;">
+                        <label class="form-check-label w-100" for="chk_estado_visual" style="cursor:pointer;">
+                            <span class="fw-bold d-block">{{ t('movimentacao.chk_estado_visual') }}</span>
+                            <span class="text-muted small">{{ t('movimentacao.chk_visual_sub') }}</span>
+                        </label>
+                    </div>
+
+                    <div class="form-check p-3 border rounded d-flex align-items-center gap-3" id="bloco_bateria_ok">
+                        <input class="form-check-input chk-item flex-shrink-0" type="checkbox"
+                               id="chk_bateria_ok" style="width:1.4em;height:1.4em;cursor:pointer;">
+                        <label class="form-check-label w-100" for="chk_bateria_ok" style="cursor:pointer;">
+                            <span class="fw-bold d-block">{{ t('movimentacao.chk_bateria') }}</span>
+                            <span class="text-muted small">{{ t('movimentacao.chk_bateria_sub') }}</span>
+                        </label>
+                    </div>
+
+                    <div class="form-check p-3 border rounded d-flex align-items-center gap-3" id="bloco_leitura_ok">
+                        <input class="form-check-input chk-item flex-shrink-0" type="checkbox"
+                               id="chk_leitura_ok" style="width:1.4em;height:1.4em;cursor:pointer;">
+                        <label class="form-check-label w-100" for="chk_leitura_ok" style="cursor:pointer;">
+                            <span class="fw-bold d-block">{{ t('movimentacao.chk_leitura') }}</span>
+                            <span class="text-muted small">{{ t('movimentacao.chk_leitura_sub') }}</span>
+                        </label>
+                    </div>
+
+                    <div class="form-check p-3 border rounded d-flex align-items-center gap-3" id="bloco_identificacao_ok">
+                        <input class="form-check-input chk-item flex-shrink-0" type="checkbox"
+                               id="chk_identificacao_ok" style="width:1.4em;height:1.4em;cursor:pointer;">
+                        <label class="form-check-label w-100" for="chk_identificacao_ok" style="cursor:pointer;">
+                            <span class="fw-bold d-block">{{ t('movimentacao.chk_lacre') }}</span>
+                            <span class="text-muted small">{{ t('movimentacao.chk_lacre_sub') }}</span>
+                        </label>
+                    </div>
+
+                    <div class="form-check p-3 border rounded d-flex align-items-center gap-3" id="bloco_equipamento_limpo">
+                        <input class="form-check-input chk-item flex-shrink-0" type="checkbox"
+                               id="chk_equipamento_limpo" style="width:1.4em;height:1.4em;cursor:pointer;">
+                        <label class="form-check-label w-100" for="chk_equipamento_limpo" style="cursor:pointer;">
+                            <span class="fw-bold d-block">{{ t('movimentacao.chk_limpeza') }}</span>
+                            <span class="text-muted small">{{ t('movimentacao.chk_limpeza_sub') }}</span>
+                        </label>
+                    </div>
+
+                </div>
+            </div>
+            <div class="modal-footer flex-column gap-2 align-items-stretch">
+                <div id="aviso-checklist-incompleto" class="alert alert-warning py-2 small mb-0">
+                    <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                    {{ t('movimentacao.chk_aviso') }}
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-secondary flex-fill"
+                            onclick="fecharChecklist()">
+                        <i class="fa-solid fa-arrow-left me-1"></i>{{ t('btn.voltar') }}
+                    </button>
+                    <button type="button" class="btn btn-dark flex-fill fw-bold"
+                            id="btn-confirmar-checklist" disabled
+                            onclick="confirmarChecklist()"
+                            style="background-color: #0f172a;">
+                        <i class="fa-solid fa-check me-1"></i>{{ t('movimentacao.btn_confirmar_retirada') }}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- H2 — COMPLEMENTOS DA RETIRADA (pacote Handheld)
+     Irmão do modalChecklist: mesma posição no fluxo (depois do checklist, antes
+     do submit) e mesmo padrão de confirmação.
+
+     🔴 D8 — este popup CONFIRMA, não pergunta. A quantidade já vem em 1, que é a
+     operação normal; mais de uma é exceção e custa um clique a mais, no link
+     discreto. Um <select quantidade> à vista convidaria a mexer, que é
+     exatamente o oposto do pedido. -->
+<div class="modal fade" id="modalComplementos" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold">
+                    <i class="fa-solid fa-plug-circle-plus me-2"></i>{{ t('compmov.titulo') }}
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div id="comp-camara" class="small text-muted mb-3 d-none"></div>
+                <div id="comp-corpo"></div>
+                <div id="comp-mais" class="mt-3 d-none"></div>
+            </div>
+            <div class="modal-footer d-flex justify-content-between">
+                <button type="button" class="btn btn-link text-muted text-decoration-none p-0"
+                        onclick="fecharComplementos()">
+                    <i class="fa-solid fa-arrow-left me-1"></i>{{ t('compmov.voltar') }}
+                </button>
+                <button type="button" class="btn btn-success btn-lg fw-bold px-4"
+                        id="btn-confirmar-complementos" onclick="confirmarComplementos()">
+                    <i class="fa-solid fa-check me-1"></i>{{ t('compmov.confirmar') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- H3 — CONFERÊNCIA DA DEVOLUÇÃO
+     Simetria com o modalChecklist da retirada. Abre já mostrando o que saiu com
+     este coletor: o operador confere em vez de lembrar.
+
+     🔴 Não conferir = não voltou. O contrário (assumir devolução ao fechar o
+     modal) transformaria o controle em teatro — bastaria fechar para quitar a
+     dívida de todo mundo. E a devolução NUNCA é bloqueada por falta: o coletor
+     volta, a dívida fica registrada. -->
+<div class="modal fade" id="modalConferencia" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold">
+                    <i class="fa-solid fa-clipboard-check me-2"></i>{{ t('confdev.titulo') }}
+                </h5>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted">{{ t('confdev.instrucao') }}</p>
+                <div id="conf-corpo"></div>
+                <div id="conf-aviso" class="alert alert-warning py-2 small mt-3 d-none"></div>
+            </div>
+            <div class="modal-footer d-flex justify-content-between">
+                <button type="button" class="btn btn-link text-muted text-decoration-none p-0"
+                        onclick="fecharConferencia()">
+                    <i class="fa-solid fa-arrow-left me-1"></i>{{ t('compmov.voltar') }}
+                </button>
+                <button type="button" class="btn btn-primary btn-lg fw-bold px-4"
+                        onclick="confirmarConferencia()">
+                    <i class="fa-solid fa-check me-1"></i>{{ t('confdev.confirmar') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ── Modal: Cadastro rápido de Colaborador ──
+    function abrirModalCadastroCampo() {
+        // Reset do form
+        document.getElementById('campo-nome').value = '';
+        document.getElementById('campo-erro').classList.add('d-none');
+        document.getElementById('campo-sucesso').classList.add('d-none');
+        document.getElementById('campo-form').classList.remove('d-none');
+        document.getElementById('campo-footer').classList.remove('d-none');
+
+        // Herda o RE que o operador já bipou — não faz ele digitar duas vezes.
+        const reDigitado = document.getElementById('re_input').value.trim();
+        document.getElementById('campo-re').value = reDigitado;
+
+        new bootstrap.Modal(document.getElementById('modalCadastroCampo')).show();
+    }
+
+    function salvarCadastroCampo() {
+        const nome  = document.getElementById('campo-nome').value.trim();
+        const re    = document.getElementById('campo-re').value.trim();
+        const erroEl = document.getElementById('campo-erro');
+
+        function mostrarErro(msg) {
+            erroEl.textContent = msg;
+            erroEl.classList.remove('d-none');
+        }
+
+        erroEl.classList.add('d-none');
+
+        if (!nome)                 return mostrarErro('Informe o nome completo.');
+        if (!re)                   return mostrarErro('Informe o RE do colaborador.');
+        if (!/^\d{4,}$/.test(re))  return mostrarErro('RE deve ter ao menos 4 dígitos e conter apenas números.');
+
+        const btn = document.getElementById('btn-salvar-campo');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Cadastrando...';
+
+        // Flask-WTF valida CSRF em todo POST — fetch com FormData manual não
+        // recebe o token injetado nos <form>, então mandamos da meta tag.
+        const fd = new FormData();
+        fd.append('nome', nome);
+        fd.append('re', re);
+        const metaCsrf = document.querySelector('meta[name="csrf-token"]');
+        if (metaCsrf) fd.append('csrf_token', metaCsrf.getAttribute('content'));
+
+        fetch('/admin/colaboradores/api/criar-campo', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    document.getElementById('campo-form').classList.add('d-none');
+                    document.getElementById('campo-footer').classList.add('d-none');
+                    document.getElementById('campo-sucesso-nome').textContent = data.nome + ' — RE ' + data.re;
+                    document.getElementById('campo-sucesso').classList.remove('d-none');
+                    // Revalida o RE na tela: o card vira verde e libera o botão de saída
+                    // sem o operador precisar redigitar.
+                    const reInput = document.getElementById('re_input');
+                    reInput.value = data.re;
+                    reInput.dispatchEvent(new Event('input'));
+                } else {
+                    mostrarErro(data.erro || 'Erro ao cadastrar.');
+                }
+            })
+            .catch(() => mostrarErro('Falha de comunicação com o servidor.'))
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-floppy-disk me-1"></i>Cadastrar';
+            });
+    }
+
+    // ── Estado compartilhado do checkout ──
+    const _checkout = { re: false, coletor: false };
+    function avaliarBotaoSaida() {
+        document.getElementById('btn-confirmar-saida').disabled = !(_checkout.re && _checkout.coletor);
+    }
+
+    // ── Lookup de RE ──
+    (function () {
+        const reInput   = document.getElementById('re_input');
+        const reHidden  = document.getElementById('re_hidden');
+        const reCard    = document.getElementById('re-card');
+        const iconEl    = document.getElementById('re-status-icon').querySelector('i');
+        let debounceTimer = null;
+
+        function resetRE() {
+            reHidden.value = '';
+            reCard.innerHTML = '';
+            reCard.classList.add('d-none');
+            _checkout.re = false;
+            avaliarBotaoSaida();
+            iconEl.className = 'fa-solid fa-id-card text-muted';
+        }
+
+        reInput.addEventListener('input', function () {
+            clearTimeout(debounceTimer);
+            const re = this.value.trim();
+
+            if (!/^\d{4,}$/.test(re)) {
+                resetRE();
+                return;
+            }
+
+            iconEl.className = 'fa-solid fa-spinner fa-spin text-secondary';
+
+            debounceTimer = setTimeout(() => {
+                // Lookup por RE exato contra a tabela de colaboradores — não é
+                // live search: só confirma quem é o RE bipado. O backend revalida
+                // no submit, então isto é conveniência, não a trava de segurança.
+                fetch(`/admin/colaboradores/api/re/${encodeURIComponent(re)}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.encontrado) {
+                            reHidden.value = re;
+                            _checkout.re = true;
+                            avaliarBotaoSaida();
+                            iconEl.className = 'fa-solid fa-circle-check text-success';
+
+                            const iniciais = data.nome.split(' ').map(p => p[0]).join('').slice(0,2).toUpperCase();
+                            reCard.innerHTML = `
+                                <div class="d-flex align-items-center p-2 rounded border border-success bg-success bg-opacity-10">
+                                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center fw-bold me-2"
+                                         style="width:36px;height:36px;background:var(--accent);color:var(--accent-contrast);font-size:0.7rem;flex-shrink:0;">
+                                        ${iniciais}
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold small">${data.nome}</div>
+                                        <div class="text-muted" style="font-size:0.72rem;">RE ${re} · ${data.cargo}</div>
+                                    </div>
+                                </div>`;
+                            reCard.classList.remove('d-none');
+                        } else if (data.motivo === 'inativo') {
+                            // RE existe, mas o colaborador foi desligado. Cadastrar de novo
+                            // não resolve — reativação é decisão da TI.
+                            resetRE();
+                            iconEl.className = 'fa-solid fa-circle-xmark text-danger';
+                            reCard.innerHTML = `
+                                <div class="p-2 rounded border border-danger bg-danger bg-opacity-10 text-danger small">
+                                    <i class="fa-solid fa-user-slash me-1"></i>
+                                    <strong>${data.nome}</strong> (RE ${re}) está inativo. Procure a TI.
+                                </div>`;
+                            reCard.classList.remove('d-none');
+                        } else {
+                            resetRE();
+                            iconEl.className = 'fa-solid fa-circle-xmark text-danger';
+                            reCard.innerHTML = `
+                                <div class="p-2 rounded border border-danger bg-danger bg-opacity-10 text-danger small">
+                                    <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                                    RE <strong>${re}</strong> não cadastrado.
+                                    <button type="button" class="btn btn-link btn-sm p-0 ms-1 text-danger"
+                                            onclick="abrirModalCadastroCampo()">Cadastrar agora?</button>
+                                </div>`;
+                            reCard.classList.remove('d-none');
+                        }
+                    })
+                    .catch(() => {
+                        resetRE();
+                        iconEl.className = 'fa-solid fa-circle-xmark text-danger';
+                    });
+            }, 400);
+        });
+    })();
+
+    // ── Troca de abas ──
+    function mudarModo(modo) {
+        const tabRet  = document.getElementById('tab-retirada');
+        const tabDev  = document.getElementById('tab-devolucao');
+        const formRet = document.getElementById('form-retirada');
+        const formDev = document.getElementById('form-devolucao');
+
+        if (modo === 'retirada') {
+            tabRet.style.backgroundColor = '#0d6efd';
+            tabRet.style.color = 'white';
+            tabDev.style.backgroundColor = '#f8f9fa';
+            tabDev.style.color = '#6c757d';
+            formRet.classList.remove('d-none');
+            formDev.classList.add('d-none');
+        } else {
+            tabRet.style.backgroundColor = '#f8f9fa';
+            tabRet.style.color = '#6c757d';
+            tabDev.style.backgroundColor = '#ffc107';
+            tabDev.style.color = 'black';
+            formRet.classList.add('d-none');
+            formDev.classList.remove('d-none');
+        }
+    }
+
+    function ativarLoading() {
+        document.getElementById('loadingOverlay').classList.remove('d-none');
+    }
+
+    // ── Preview de imagem — Retirada ──
+    document.getElementById('foto_retirada_input').addEventListener('change', function () {
+        const file = this.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            document.getElementById('img_retirada').src = e.target.result;
+            document.getElementById('preview_retirada').classList.remove('d-none');
+        };
+        reader.readAsDataURL(file);
+    });
+
+    // ── Preview de imagem — Devolução ──
+    document.getElementById('foto_devolucao_input').addEventListener('change', function () {
+        const file = this.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            document.getElementById('img_devolucao').src = e.target.result;
+            document.getElementById('preview_devolucao').classList.remove('d-none');
+        };
+        reader.readAsDataURL(file);
+    });
+
+    // ── Mapa de diagnóstico para devolução ──
+    var mapaDiagnosticoDevol = {};
+    try {
+        mapaDiagnosticoDevol = JSON.parse('{{ mapa_diagnostico_i18n | tojson | safe }}');
+    } catch(e) {}
+
+    // ── Foto obrigatória se VIOLADO ou danificado ──
+    function atualizarFotoRequired() {
+        const identificacaoViolada = document.getElementById('identificacao_rompida').checked;
+        const danificado           = document.getElementById('voltou_danificado').checked;
+        const input                = document.getElementById('foto_devolucao_input');
+        const badge                = document.getElementById('badge_foto_dev');
+        const aviso                = document.getElementById('aviso_foto_violado');
+
+        if (identificacaoViolada || danificado) {
+            input.setAttribute('required', 'required');
+            badge.textContent = 'Obrigatória';
+            badge.className = 'badge bg-danger ms-1';
+        } else {
+            input.removeAttribute('required');
+            badge.textContent = 'Opcional';
+            badge.className = 'badge bg-secondary ms-1';
+        }
+
+        if (identificacaoViolada) {
+            aviso.classList.remove('d-none');
+        } else {
+            aviso.classList.add('d-none');
+        }
+    }
+
+    // ── Toggle área de diagnóstico — Voltou danificado ──
+    function toggleDanificado() {
+        const chk  = document.getElementById('voltou_danificado');
+        const area = document.getElementById('area_danificado');
+
+        if (chk.checked) {
+            area.classList.remove('d-none');
+        } else {
+            area.classList.add('d-none');
+            document.getElementById('dev_cat_defeito').value = '';
+            document.getElementById('dev_detalhe_defeito').innerHTML = '<option value="">Selecione...</option>';
+            document.getElementById('dev_desc_problema').value = '';
+        }
+
+        atualizarFotoRequired();
+    }
+
+    // ── Carrega detalhes de defeito conforme categoria ──
+    function carregarDetalhesDevol() {
+        const cat = document.getElementById('dev_cat_defeito').value;
+        const sel = document.getElementById('dev_detalhe_defeito');
+        sel.innerHTML = '<option value="">Selecione...</option>';
+        if (cat && mapaDiagnosticoDevol[cat]) {
+            mapaDiagnosticoDevol[cat].forEach(function(item) {
+                const opt = document.createElement('option');
+                opt.value = item[0];
+                opt.text  = item[1];
+                sel.add(opt);
+            });
+        }
+    }
+
+    // ── Checklist de Entrega ──
+    var _checklistModal = null;
+
+    function abrirChecklist() {
+        // Reset: desmarca todos e remove visual de OK
+        document.querySelectorAll('.chk-item').forEach(function(c) {
+            c.checked = false;
+            const bloco = c.closest('.form-check');
+            bloco.classList.remove('border-success', 'bg-success', 'bg-opacity-10');
+        });
+        document.getElementById('btn-confirmar-checklist').disabled = true;
+        document.getElementById('aviso-checklist-incompleto').classList.remove('d-none');
+        _checklistModal = new bootstrap.Modal(document.getElementById('modalChecklist'));
+        _checklistModal.show();
+    }
+
+    function fecharChecklist() {
+        if (_checklistModal) _checklistModal.hide();
+    }
+
+    function confirmarChecklist() {
+        // Propaga os valores para os inputs hidden do form antes de submeter
+        ['estado_visual', 'bateria_ok', 'leitura_ok', 'identificacao_ok', 'equipamento_limpo'].forEach(function(campo) {
+            document.getElementById('hid_' + campo).value = 'true';
+        });
+        fecharChecklist();
+        // H2 — quem tem complemento a confirmar passa pelo popup; quem não tem
+        // segue direto, e o balcão fica idêntico ao de antes desta fatia.
+        if (temComplementos()) {
+            abrirComplementos();
+            return;
+        }
+        ativarLoading();
+        document.getElementById('form-retirada-post').submit();
+    }
+
+    // ── H3: conferência da devolução ──
+    var _emCampo = [];
+    var _conferenciaModal = null;
+    var _conferenciaOk = false;
+
+    function carregarEmCampo(coletorId) {
+        _emCampo = [];
+        _conferenciaOk = false;
+        if (!coletorId) { return; }
+        fetch('/api/coletor/' + coletorId + '/em-campo')
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) { if (d && d.encontrado) { _emCampo = d.pendentes || []; } })
+            .catch(function () { /* sem conferência o fluxo é o de sempre */ });
+    }
+
+    function interceptarDevolucao(ev) {
+        // Sem nada a conferir, ou já confirmado, segue o fluxo original.
+        if (!_emCampo.length || _conferenciaOk) {
+            ativarLoading();
+            return true;
+        }
+        ev.preventDefault();
+        abrirConferencia();
+        return false;
+    }
+
+    function abrirConferencia() {
+        var corpo = document.getElementById('conf-corpo');
+        corpo.innerHTML = _emCampo.map(function (p) {
+            var titulo = p.identificador ? (p.identificador + ' · ' + p.categoria) : p.categoria;
+            // Peça identificada é sim/não; bateria é quantidade.
+            var controle = p.identificador
+                ? '<div class="form-check form-switch">'
+                + '  <input class="form-check-input conf-item" type="checkbox" checked'
+                + '         data-linha="' + p.linha_id + '" data-max="' + p.faltando + '">'
+                + '</div>'
+                : '<div class="d-flex align-items-center gap-2">'
+                + '  <button type="button" class="btn btn-outline-secondary btn-sm"'
+                + '          onclick="ajustarConf(' + p.linha_id + ', -1)">−</button>'
+                + '  <span class="fw-bold fs-5" id="conf-qtd-' + p.linha_id + '">' + p.faltando + '</span>'
+                + '  <span class="text-muted small">/ ' + p.faltando + '</span>'
+                + '  <button type="button" class="btn btn-outline-secondary btn-sm"'
+                + '          onclick="ajustarConf(' + p.linha_id + ', 1)">+</button>'
+                + '  <input type="hidden" class="conf-qtd" data-linha="' + p.linha_id + '"'
+                + '         data-max="' + p.faltando + '" value="' + p.faltando + '">'
+                + '</div>';
+            return '<div class="d-flex align-items-center justify-content-between border rounded p-3 mb-2">'
+                 + '  <div><div class="fw-bold">' + titulo + '</div>'
+                 + '  <div class="small text-muted">{{ t("confdev.saiu_com") }} ' + p.qtd_saida + '</div></div>'
+                 + controle + '</div>';
+        }).join('');
+        atualizarAvisoConferencia();
+        _conferenciaModal = new bootstrap.Modal(document.getElementById('modalConferencia'));
+        _conferenciaModal.show();
+    }
+
+    function ajustarConf(linhaId, delta) {
+        var campo = document.querySelector('.conf-qtd[data-linha="' + linhaId + '"]');
+        var max = parseInt(campo.getAttribute('data-max'), 10);
+        var novo = Math.max(0, Math.min(max, parseInt(campo.value, 10) + delta));
+        campo.value = novo;
+        document.getElementById('conf-qtd-' + linhaId).textContent = novo;
+        atualizarAvisoConferencia();
+    }
+
+    function _faltasDaConferencia() {
+        var falta = 0;
+        document.querySelectorAll('.conf-qtd').forEach(function (c) {
+            falta += parseInt(c.getAttribute('data-max'), 10) - parseInt(c.value, 10);
+        });
+        document.querySelectorAll('.conf-item').forEach(function (c) {
+            if (!c.checked) { falta += parseInt(c.getAttribute('data-max'), 10); }
+        });
+        return falta;
+    }
+
+    function atualizarAvisoConferencia() {
+        var aviso = document.getElementById('conf-aviso');
+        var falta = _faltasDaConferencia();
+        if (falta > 0) {
+            // Avisa, mas NÃO impede: a devolução não trava por falta.
+            aviso.textContent = '{{ t("confdev.aviso_falta") }}'.replace('{n}', falta);
+            aviso.classList.remove('d-none');
+        } else {
+            aviso.classList.add('d-none');
+        }
+    }
+
+    document.addEventListener('change', function (ev) {
+        if (ev.target.classList && ev.target.classList.contains('conf-item')) {
+            atualizarAvisoConferencia();
+        }
+    });
+
+    function fecharConferencia() {
+        if (_conferenciaModal) _conferenciaModal.hide();
+    }
+
+    function confirmarConferencia() {
+        var form = document.getElementById('form-devolucao-post');
+        form.querySelectorAll('.conf-injetado').forEach(function (el) { el.remove(); });
+
+        function injetar(nome, valor) {
+            var i = document.createElement('input');
+            i.type = 'hidden'; i.name = nome; i.value = valor;
+            i.className = 'conf-injetado';
+            form.appendChild(i);
+        }
+
+        document.querySelectorAll('.conf-qtd').forEach(function (c) {
+            injetar('conferencia_' + c.getAttribute('data-linha'), c.value);
+        });
+        document.querySelectorAll('.conf-item').forEach(function (c) {
+            injetar('conferencia_' + c.getAttribute('data-linha'), c.checked ? c.getAttribute('data-max') : 0);
+        });
+
+        _conferenciaOk = true;
+        fecharConferencia();
+        ativarLoading();
+        form.submit();
+    }
+
+    // ── H2: complementos da retirada ──
+    var _complementos = { baterias: [], pareados: [], camara: null, padrao: 1 };
+    var _complementosModal = null;
+    var _qtdBateria = 1;
+
+    function carregarComplementos(coletorId) {
+        _complementos = { baterias: [], pareados: [], camara: null, padrao: 1 };
+        _qtdBateria = 1;
+        avisarSemCatalogo(false);
+        if (!coletorId) { return; }
+        fetch('/api/coletor/' + coletorId + '/complementos')
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) {
+                if (!d || !d.encontrado) { return; }
+                _complementos = {
+                    baterias: d.baterias || [],
+                    pareados: d.pareados || [],
+                    camara: d.camara || null,
+                    padrao: d.baterias_padrao || 1
+                };
+                _qtdBateria = _complementos.padrao;
+                // 🔴 Silêncio NUNCA pode ser a resposta para "não configurado".
+                // O catálogo é por empresa: um coletor de tenant sem catálogo se
+                // comporta igual a um sistema quebrado — nenhum popup, nenhuma
+                // pista. O aviso distingue as duas coisas.
+                avisarSemCatalogo(!temComplementos());
+            })
+            .catch(function () { /* rede fora: o fluxo segue como antes da H2 */ });
+    }
+
+    function avisarSemCatalogo(mostrar) {
+        var card = document.getElementById('coletor-card-ret');
+        if (!card) { return; }
+        var aviso = document.getElementById('aviso-sem-catalogo');
+        if (!mostrar) {
+            if (aviso) { aviso.remove(); }
+            return;
+        }
+        if (aviso) { return; }
+        aviso = document.createElement('div');
+        aviso.id = 'aviso-sem-catalogo';
+        aviso.className = 'small text-muted mt-1';
+        aviso.innerHTML = '<i class="fa-solid fa-circle-info me-1"></i>'
+                        + '{{ t("compmov.sem_catalogo") }}';
+        card.parentNode.insertBefore(aviso, card.nextSibling);
+    }
+
+    function temComplementos() {
+        return _complementos.baterias.length > 0 || _complementos.pareados.length > 0;
+    }
+
+    function _rotuloBateria(n) {
+        return n === 1 ? '{{ t("compmov.bateria_sing") }}' : '{{ t("compmov.bateria_plur") }}';
+    }
+
+    function desenharComplementos() {
+        var corpo = document.getElementById('comp-corpo');
+        var html = '';
+
+        if (_complementos.baterias.length) {
+            var bat = _complementos.baterias[0];   // a primeira é a recomendada
+            var disp = (bat.disponivel === null || bat.disponivel === undefined)
+                ? '{{ t("compmov.sem_estoque_info") }}'
+                : bat.disponivel + ' {{ t("compmov.disponiveis") }}';
+            // A frase CONFIRMA o número. Não há campo editável aqui: mexer na
+            // quantidade é o caminho da exceção, no link abaixo.
+            html += '<div class="d-flex align-items-center justify-content-between border rounded p-3 mb-2">'
+                  + '  <div>'
+                  + '    <div class="fw-bold fs-5">' + '{{ t("compmov.saindo_com") }}'
+                        .replace('{n}', _qtdBateria).replace('{item}', _rotuloBateria(_qtdBateria)) + '</div>'
+                  + '    <div class="small text-muted">' + bat.nome + ' — ' + disp + '</div>'
+                  + '  </div>'
+                  + '  <i class="fa-solid fa-battery-full fa-2x text-success"></i>'
+                  + '</div>';
+        }
+
+        _complementos.pareados.forEach(function (p) {
+            html += '<div class="d-flex align-items-center justify-content-between border rounded p-3 mb-2 bg-light">'
+                  + '  <div>'
+                  + '    <div class="fw-bold">' + p.identificador + '</div>'
+                  + '    <div class="small text-muted">' + p.categoria
+                  + '      · {{ t("compmov.pareado_titulo") }}</div>'
+                  + '  </div>'
+                  + '  <div class="form-check form-switch">'
+                  + '    <input class="form-check-input comp-pareado" type="checkbox" checked'
+                  + '           data-item="' + p.item_id + '" data-cat="' + p.categoria_id + '">'
+                  + '  </div>'
+                  + '</div>';
+        });
+
+        corpo.innerHTML = html;
+
+        var camaraBox = document.getElementById('comp-camara');
+        if (_complementos.camara) {
+            camaraBox.textContent = '{{ t("compmov.camara_coletor") }}: ' + _complementos.camara;
+            camaraBox.classList.remove('d-none');
+        } else {
+            camaraBox.classList.add('d-none');
+        }
+
+        // O caminho da EXCEÇÃO: discreto, textual, sem número à vista.
+        var mais = document.getElementById('comp-mais');
+        if (_complementos.baterias.length) {
+            mais.classList.remove('d-none');
+            mais.innerHTML =
+                '<button type="button" class="btn btn-link btn-sm text-muted p-0" onclick="revelarMaisBaterias()">'
+              + '  <i class="fa-solid fa-plus me-1"></i>{{ t("compmov.precisa_mais") }}</button>'
+              + '<div id="comp-stepper" class="d-none mt-2 d-flex align-items-center gap-2">'
+              + '  <button type="button" class="btn btn-outline-secondary btn-sm" onclick="ajustarBateria(-1)">−</button>'
+              + '  <span class="fw-bold fs-5" id="comp-qtd">' + _qtdBateria + '</span>'
+              + '  <button type="button" class="btn btn-outline-secondary btn-sm" onclick="ajustarBateria(1)">+</button>'
+              + '</div>';
+        } else {
+            mais.classList.add('d-none');
+        }
+    }
+
+    function revelarMaisBaterias() {
+        document.getElementById('comp-stepper').classList.remove('d-none');
+    }
+
+    function ajustarBateria(delta) {
+        _qtdBateria = Math.max(1, _qtdBateria + delta);
+        document.getElementById('comp-qtd').textContent = _qtdBateria;
+        // Redesenha só a frase do topo, para o número confirmado bater com o stepper.
+        var titulo = document.querySelector('#comp-corpo .fw-bold.fs-5');
+        if (titulo) {
+            titulo.textContent = '{{ t("compmov.saindo_com") }}'
+                .replace('{n}', _qtdBateria).replace('{item}', _rotuloBateria(_qtdBateria));
+        }
+    }
+
+    function abrirComplementos() {
+        desenharComplementos();
+        _complementosModal = new bootstrap.Modal(document.getElementById('modalComplementos'));
+        _complementosModal.show();
+    }
+
+    function fecharComplementos() {
+        if (_complementosModal) _complementosModal.hide();
+    }
+
+    function confirmarComplementos() {
+        var form = document.getElementById('form-retirada-post');
+        // Limpa injeções de uma tentativa anterior — sem isso, voltar e
+        // reconfirmar duplicaria os complementos no POST.
+        form.querySelectorAll('.comp-injetado').forEach(function (el) { el.remove(); });
+
+        function injetar(nome, valor) {
+            var i = document.createElement('input');
+            i.type = 'hidden'; i.name = nome; i.value = valor;
+            i.className = 'comp-injetado';
+            form.appendChild(i);
+        }
+
+        if (_complementos.baterias.length) {
+            var bat = _complementos.baterias[0];
+            injetar('complemento_categoria', bat.categoria_id);
+            injetar('complemento_qtd_' + bat.categoria_id, _qtdBateria);
+        }
+        document.querySelectorAll('.comp-pareado').forEach(function (chk) {
+            if (!chk.checked) { return; }
+            var cat = chk.getAttribute('data-cat');
+            injetar('complemento_categoria', cat);
+            injetar('complemento_item_' + cat, chk.getAttribute('data-item'));
+        });
+
+        fecharComplementos();
+        ativarLoading();
+        form.submit();
+    }
+
+    // Feedback visual a cada item marcado/desmarcado
+    document.querySelectorAll('.chk-item').forEach(function(chk) {
+        chk.addEventListener('change', function() {
+            const bloco = this.closest('.form-check');
+            if (this.checked) {
+                bloco.classList.remove('border');
+                bloco.classList.add('border-success', 'bg-success', 'bg-opacity-10');
+            } else {
+                bloco.classList.remove('border-success', 'bg-success', 'bg-opacity-10');
+                bloco.classList.add('border');
+            }
+            const allChecked = [...document.querySelectorAll('.chk-item')].every(function(c) { return c.checked; });
+            document.getElementById('btn-confirmar-checklist').disabled = !allChecked;
+            const aviso = document.getElementById('aviso-checklist-incompleto');
+            if (allChecked) {
+                aviso.classList.add('d-none');
+            } else {
+                aviso.classList.remove('d-none');
+            }
+        });
+    });
+
+    // ── Toggle Patrimônio / Serial ──
+    const PLACEHOLDER_PAT_RET   = document.getElementById('busca_valor_ret').placeholder;
+    const PLACEHOLDER_PAT_DEV   = document.getElementById('busca_valor_dev').placeholder;
+    const PLACEHOLDER_SERIAL    = '{{ t("movimentacao.placeholder_serial_number") }}';
+    const MSG_COLETOR_NAO_FOUND = '{{ t("movimentacao.card_nao_encontrado") }}';
+    const MSG_COLETOR_NAO_USO   = '{{ t("movimentacao.card_nao_em_uso") }}';
+
+    document.querySelectorAll('input[name="busca_modo_ret_ui"]').forEach(function(radio) {
+        radio.addEventListener('change', function() {
+            const isSerial = document.getElementById('modo_serial_ret').checked;
+            document.getElementById('busca_modo_ret').value       = isSerial ? 'serial' : 'patrimonio';
+            document.getElementById('busca_valor_ret').placeholder = isSerial ? PLACEHOLDER_SERIAL : PLACEHOLDER_PAT_RET;
+            document.getElementById('busca_valor_ret').value       = '';
+            document.getElementById('coletor-card-ret').innerHTML  = '';
+            document.getElementById('coletor-card-ret').classList.add('d-none');
+            _checkout.coletor = false;
+            avaliarBotaoSaida();
+            document.getElementById('busca_valor_ret').focus();
+        });
+    });
+
+    document.querySelectorAll('input[name="busca_modo_dev_ui"]').forEach(function(radio) {
+        radio.addEventListener('change', function() {
+            const isSerial = document.getElementById('modo_serial_dev').checked;
+            document.getElementById('busca_modo_dev').value       = isSerial ? 'serial' : 'patrimonio';
+            document.getElementById('busca_valor_dev').placeholder = isSerial ? PLACEHOLDER_SERIAL : PLACEHOLDER_PAT_DEV;
+            document.getElementById('busca_valor_dev').value       = '';
+            document.getElementById('coletor-card-dev').classList.add('d-none');
+            document.getElementById('busca_valor_dev').focus();
+        });
+    });
+
+    // ── Card de feedback do coletor ──
+    function buildColetorCard(data, modo) {
+        const isCheckIn = modo === 'checkin';
+
+        // Mapeamento de status → cor Bootstrap
+        const statusColor = {
+            'Disponível':    'success',
+            'Em Uso':        'primary',
+            'Manutenção':    'warning',
+            'Suspenso':      'danger',
+        };
+
+        if (!data.encontrado) {
+            return `<div class="p-2 rounded border border-danger bg-danger bg-opacity-10 text-danger small">
+                        <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                        ${MSG_COLETOR_NAO_FOUND}
+                    </div>`;
+        }
+
+        // Check-in: só exibe card se estiver "Em Uso"
+        if (isCheckIn && data.status !== 'Em Uso') {
+            return `<div class="p-2 rounded border border-warning bg-warning bg-opacity-10 text-warning small">
+                        <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                        ${MSG_COLETOR_NAO_USO.replace('{patrimonio}', data.rotulo).replace('{status}', data.status)}
+                    </div>`;
+        }
+
+        const cor       = statusColor[data.status] || 'secondary';
+        const camaraTag = data.camara
+            ? `<span class="badge bg-secondary ms-1" style="font-size:0.65em;">${data.camara}</span>`
+            : '';
+        const localTag  = data.localidade
+            ? `<span class="text-muted ms-2" style="font-size:0.7rem;"><i class="fa-solid fa-location-dot me-1"></i>${data.localidade}</span>`
+            : '';
+        const emUsoInfo = (data.status === 'Em Uso' && data.em_uso_por)
+            ? `<div class="mt-1" style="font-size:0.7rem;">
+                   <i class="fa-solid fa-user me-1 text-muted"></i>
+                   Com RE <strong>${data.em_uso_por}</strong>
+                   ${data.hora_saida ? `desde ${data.hora_saida}` : ''}
+               </div>`
+            : '';
+
+        return `<div class="d-flex align-items-start p-2 rounded border border-${cor} bg-${cor} bg-opacity-10">
+                    <div class="me-2 mt-1">
+                        <i class="fa-solid fa-mobile-screen-button fa-lg text-${cor}"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="fw-bold small">
+                            ${data.rotulo}
+                            <span class="badge bg-${cor} ms-1" style="font-size:0.65em;">${data.status}</span>
+                            ${camaraTag}
+                        </div>
+                        <div class="text-muted" style="font-size:0.72rem;">
+                            ${data.modelo} &nbsp;·&nbsp; Serial: ${data.serial}
+                            ${localTag}
+                        </div>
+                        ${emUsoInfo}
+                    </div>
+                </div>`;
+    }
+
+    function setupColetorLookup(inputId, modoHiddenId, cardId, checkMode) {
+        const input = document.getElementById(inputId);
+        const card  = document.getElementById(cardId);
+        let timer   = null;
+
+        input.addEventListener('input', function () {
+            clearTimeout(timer);
+            const q = this.value.trim();
+            if (q.length < 2) {
+                card.innerHTML = '';
+                card.classList.add('d-none');
+                if (checkMode === 'checkout') {
+                    _checkout.coletor = false;
+                    avaliarBotaoSaida();
+                }
+                return;
+            }
+            timer = setTimeout(function () {
+                const modo = document.getElementById(modoHiddenId).value;
+                fetch(`/api/coletor/buscar?q=${encodeURIComponent(q)}&modo=${modo}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        card.innerHTML = buildColetorCard(data, checkMode);
+                        card.classList.remove('d-none');
+                        if (checkMode === 'checkout') {
+                            _checkout.coletor = data.encontrado && data.status === 'Disponível';
+                            avaliarBotaoSaida();
+                            // H2 — o sistema já sabe qual coletor é, então busca
+                            // AGORA o que deve sair com ele. Assim o popup abre
+                            // instantâneo na confirmação, sem espera no balcão.
+                            carregarComplementos(data.encontrado ? data.id : null);
+                        } else {
+                            // H3 — mesma ideia na devolução: o que este coletor
+                            // levou já vem carregado antes de o operador clicar.
+                            carregarEmCampo(data.encontrado ? data.id : null);
+                        }
+                    })
+                    .catch(function () {
+                        card.innerHTML = '';
+                        card.classList.add('d-none');
+                        if (checkMode === 'checkout') {
+                            _checkout.coletor = false;
+                            avaliarBotaoSaida();
+                        }
+                    });
+            }, 350);
+        });
+
+        input.addEventListener('focus', function () {
+            if (!this.value.trim()) {
+                card.innerHTML = '';
+                card.classList.add('d-none');
+            }
+        });
+    }
+
+    setupColetorLookup('busca_valor_ret', 'busca_modo_ret', 'coletor-card-ret', 'checkout');
+    setupColetorLookup('busca_valor_dev', 'busca_modo_dev', 'coletor-card-dev', 'checkin');
+
+    // ── Polling 15s — re-verifica status dos coletores visíveis ──
+    function _makePollFn(inputId, modoHiddenId, cardId, checkMode, tsValId, tsWrapId) {
+        return function () {
+            var input = document.getElementById(inputId);
+            var card  = document.getElementById(cardId);
+            var q = input ? input.value.trim().toUpperCase() : '';
+            if (q.length < 2 || !card || card.classList.contains('d-none')) return;
+            var modo = document.getElementById(modoHiddenId).value;
+            fetch('/api/coletor/buscar?q=' + encodeURIComponent(q) + '&modo=' + modo)
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    card.innerHTML = buildColetorCard(data, checkMode);
+                    if (checkMode === 'checkout') {
+                        _checkout.coletor = data.encontrado && data.status === 'Disponível';
+                        avaliarBotaoSaida();
+                    }
+                    var now = new Date();
+                    var ts  = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+                    var valEl  = document.getElementById(tsValId);
+                    var wrapEl = document.getElementById(tsWrapId);
+                    if (valEl)  valEl.textContent = '{{ t("polling.ultima_atualizacao") }} ' + ts;
+                    if (wrapEl) wrapEl.style.removeProperty('display');
+                })
+                .catch(function () {});
+        };
+    }
+
+    var _pollRet = _makePollFn('busca_valor_ret','busca_modo_ret','coletor-card-ret','checkout','polling-ts-ret-val','polling-ts-ret');
+    var _pollDev = _makePollFn('busca_valor_dev','busca_modo_dev','coletor-card-dev','checkin', 'polling-ts-dev-val','polling-ts-dev');
+    startPolling(function () { _pollRet(); _pollDev(); }, 15);
+</script>
+
+{% endblock %}

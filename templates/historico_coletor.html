@@ -1,0 +1,370 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Histórico do Coletor{% endblock %}
+{% block content %}
+<div class="container-fluid fade-in">
+
+    {# ── Cabeçalho ── #}
+    <div class="page-header">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}" class="text-muted text-decoration-none">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('coletores.gerenciar_coletores') }}" class="text-muted text-decoration-none">{{ t('historico_coletor.breadcrumb_inventario') }}</a></li>
+                    <li class="breadcrumb-item active">{{ t('historico_coletor.breadcrumb') }}</li>
+                </ol>
+            </nav>
+            <h1 class="h2 text-dark fw-bold mb-0">
+                <span class="font-monospace">{{ coletor.patrimonio_display }}</span>
+            </h1>
+            <small class="text-muted">{{ t('label.serial') }}: {{ coletor.serial_number }} · {{ t('label.modelo') }}: {{ coletor.modelo }}</small>
+        </div>
+        <div class="d-flex gap-2">
+            <span class="badge fs-6 px-3 py-2
+                {% if coletor.status == 'Disponível' %}bg-success
+                {% elif coletor.status == 'Em Uso' %}bg-warning text-dark
+                {% else %}bg-danger{% endif %}">
+                {{ coletor.status }}
+            </span>
+        </div>
+    </div>
+
+    {# ── KPIs do coletor ── #}
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-xl-3">
+            <div class="card card-custom h-100 border-top border-3 border-primary">
+                <div class="card-body">
+                    <p class="text-muted mb-0 small text-uppercase fw-bold">{{ t('historico_coletor.kpi_movimentacoes') }}</p>
+                    <h2 class="mb-0 fw-bold text-primary">{{ movimentacoes|length }}</h2>
+                    <small class="text-muted">{{ t('historico_coletor.kpi_movimentacoes_sub') }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+
+        {# ── Histórico de Movimentações ── #}
+        <div class="col-12">
+            <div class="card card-custom shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0 fw-bold text-dark">
+                        <i class="fa-solid fa-clock-rotate-left me-2 text-muted"></i>{{ t('historico_coletor.secao_movimentacoes') }}
+                    </h5>
+                </div>
+                {% if movimentacoes %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>{{ t('historico_coletor.col_colaborador') }}</th>
+                                <th>{{ t('historico_coletor.col_saida') }}</th>
+                                <th>{{ t('label.status') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for mov in movimentacoes %}
+                            <tr>
+                                <td class="fw-bold">{{ mov.re_colaborador }}</td>
+                                <td class="text-muted small">{{ mov.data_saida.strftime('%d/%m/%Y %H:%M') }}</td>
+                                <td>
+                                    {% if mov.data_retorno %}
+                                    <span class="badge bg-success">{{ t('historico_coletor.status_devolvido') }}</span>
+                                    {% if mov.status_identificacao_retorno == 'VIOLADO' %}
+                                    <span class="badge bg-danger ms-1">{{ t('historico_coletor.lacre_violado') }}</span>
+                                    {% endif %}
+                                    {% if mov.foto_devolucao %}
+                                    <i class="fa-solid fa-camera text-muted ms-1" title="Foto registrada"></i>
+                                    {% endif %}
+                                    {% else %}
+                                    <span class="badge bg-warning text-dark">{{ t('historico_coletor.status_em_aberto') }}</span>
+                                    {% endif %}
+
+                                    {# H3 — o que saiu e não voltou. O pedido era
+                                       literal: "se estiver faltando, terá isso
+                                       explícito no histórico". Aparece mesmo em
+                                       movimentação já devolvida, porque a dívida
+                                       do complemento não se encerra com o coletor. #}
+                                    {% for p in pendencias_complemento.get(mov.id, []) %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger ms-1"
+                                          title="{{ t('compmov.nao_devolvido') }}">
+                                        <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                                        {{ p.faltando }}x {{ p.categoria.nome if p.categoria else '?' }}{% if p.item %} ({{ p.item.identificador }}){% endif %}
+                                    </span>
+                                    {# O botao fica COLADO na falta: e aqui que alguem
+                                       chega com a bateria na mao, olhando o historico
+                                       do coletor que a levou. #}
+                                    <form method="POST" class="d-inline ms-1"
+                                          action="{{ url_for('complementos.pendencia_devolver', linha_id=p.id) }}"
+                                          onsubmit="return confirm(RECEBI_CONFIRMA);">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <input type="hidden" name="voltar" value="{{ request.full_path }}">
+                                        <button type="submit" class="btn btn-success btn-sm py-0"
+                                                title="{{ t('pendcomp.recebi_titulo') }}">
+                                            <i class="fa-solid fa-check me-1"></i>{{ t('pendcomp.recebi') }}
+                                        </button>
+                                    </form>
+                                    {% endfor %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="card-body text-center py-5 text-muted">
+                    <i class="fa-solid fa-barcode fa-2x mb-3 opacity-25"></i>
+                    <p class="mb-0">{{ t('historico_coletor.sem_movimentacoes') }}</p>
+                </div>
+                {% endif %}
+
+                {# Resumo de identificações violadas #}
+                {% set violados = movimentacoes | selectattr('status_identificacao_retorno', 'equalto', 'VIOLADO') | list %}
+                {% if violados %}
+                <div class="card-footer bg-danger bg-opacity-10 border-0">
+                    <small class="text-danger fw-bold">
+                        <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                        {{ t('historico_coletor.alerta_lacres_violados', n=violados|length) }}
+                    </small>
+                </div>
+                {% endif %}
+            </div>
+
+            {# Info do coletor #}
+            <div class="card card-custom shadow-sm mt-4">
+                <div class="card-header bg-white py-3">
+                    <h6 class="mb-0 fw-bold text-dark">
+                        <i class="fa-solid fa-circle-info me-2 text-muted"></i>{{ t('historico_coletor.dados_equipamento') }}
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0 small">
+                        <dt class="col-5 text-muted">{{ t('label.patrimonio') }}</dt>
+                        <dd class="col-7 fw-bold font-monospace mb-1">{{ coletor.patrimonio_display }}</dd>
+
+                        <dt class="col-5 text-muted">{{ t('label.serial') }}</dt>
+                        <dd class="col-7 font-monospace mb-1">{{ coletor.serial_number }}</dd>
+
+                        <dt class="col-5 text-muted">{{ t('label.modelo') }}</dt>
+                        <dd class="col-7 mb-1">{{ coletor.modelo or '—' }}</dd>
+
+                        <dt class="col-5 text-muted">{{ t('label.localidade') }}</dt>
+                        <dd class="col-7 mb-1">{{ coletor.localidade.nome if coletor.localidade else '—' }}</dd>
+
+                        <dt class="col-5 text-muted">{{ t('coletores.col_alcance') }}</dt>
+                        <dd class="col-7 mb-1">
+                            {% if coletor.tipo_alcance == 'LONGA' %}
+                            <span class="badge bg-info text-dark">{{ t('coletores.alcance_longa') }}</span>
+                            {% elif coletor.tipo_alcance == 'CURTA' %}
+                            <span class="badge bg-secondary">{{ t('coletores.alcance_curta') }}</span>
+                            {% else %}
+                            —
+                            {% endif %}
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+
+            {# ── B4: Complementos deste coletor ──────────────────────────────
+               O vínculo sai do catálogo de peças e vem para cá. "O que sai junto
+               com ESTE coletor?" é pergunta sobre o equipamento — e a página do
+               item é onde tudo sobre ele acontece, que é a convenção do mercado
+               de gestão de ativos.
+
+               O vínculo é UM só por peça: escolher aqui desfaz o par que ela
+               tivesse com outro coletor. Isso está escrito na opção, antes de
+               confirmar, porque é o caso REAL (o titular foi para manutenção) e
+               não um acidente a ser bloqueado. #}
+            <div class="card card-custom shadow-sm mt-4">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold text-dark">
+                        <i class="fa-solid fa-plug-circle-plus me-2 text-muted"></i>{{ t('coletorcomp.titulo') }}
+                    </h6>
+                    <a href="{{ url_for('complementos.index') }}"
+                       class="btn btn-sm btn-outline-secondary py-0 small">
+                        <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>{{ t('coletorcomp.ir_inventario') }}
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if complementos %}
+                    <ul class="list-group list-group-flush mb-3">
+                        {% for peca in complementos %}
+                        <li class="list-group-item px-0 d-flex align-items-center justify-content-between gap-2">
+                            <div class="min-w-0">
+                                <div class="fw-bold font-monospace">{{ peca.identificador }}</div>
+                                <small class="text-muted">
+                                    {{ peca.categoria.nome if peca.categoria else '—' }}
+                                    {% if peca.categoria and not peca.categoria.atende_camara(coletor.camara) %}
+                                    {# D5 — a peça de ambiente seco não serve no congelado.
+                                       Aviso, e não trava: quem barra de verdade é a retirada. #}
+                                    <span class="badge bg-danger ms-1">{{ t('coletorcomp.nao_serve') }}</span>
+                                    {% endif %}
+                                </small>
+                            </div>
+                            <form method="POST" class="d-inline"
+                                  action="{{ url_for('complementos.item_parear', item_id=peca.id) }}"
+                                  onsubmit="return confirm(this.dataset.aviso);"
+                                  data-aviso="{{ t('coletorcomp.confirma_desvincular') }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="coletor_id" value="">
+                                <input type="hidden" name="voltar" value="{{ request.full_path }}">
+                                <button class="btn btn-sm btn-outline-secondary" type="submit">
+                                    <i class="fa-solid fa-link-slash me-1"></i>{{ t('coletorcomp.btn_desvincular') }}
+                                </button>
+                            </form>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted small mb-3">{{ t('coletorcomp.vazio') }}</p>
+                    {% endif %}
+
+                    {% if complementos_disponiveis %}
+                    <form method="POST" action="{{ url_for('complementos.item_vincular') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="coletor_id" value="{{ coletor.id }}">
+                        <input type="hidden" name="voltar" value="{{ request.full_path }}">
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold mb-1" for="pecaVincular">
+                                {{ t('coletorcomp.label_vincular') }}
+                            </label>
+                            {# Dois grupos, e não uma lista só: vincular uma peça que já
+                               acompanha outro coletor é permitido e às vezes é o que se
+                               quer (o titular foi para manutenção), mas é EXCEÇÃO. Num CD
+                               com tudo pareado a lista inteira virava aviso, e o
+                               excepcional passava por normal. #}
+                            {% set livres = complementos_disponiveis | rejectattr('com_outro') | list %}
+                            {% set com_dono = complementos_disponiveis | selectattr('com_outro') | list %}
+                            <select name="item_id" id="pecaVincular" class="form-select form-select-sm" required>
+                                <option value="">{{ t('complementos.selecione') }}</option>
+                                {% if livres %}
+                                <optgroup label="{{ t('coletorcomp.grupo_livres') }}">
+                                    {% for c in livres %}
+                                    <option value="{{ c.item.id }}">
+                                        {{ c.item.identificador }}
+                                        {% if c.item.categoria %} · {{ c.item.categoria.nome }}{% endif %}
+                                        {% if not c.serve %} — {{ t('coletorcomp.nao_serve') }}{% endif %}
+                                    </option>
+                                    {% endfor %}
+                                </optgroup>
+                                {% endif %}
+                                {% if com_dono %}
+                                <optgroup label="{{ t('coletorcomp.grupo_com_dono') }}">
+                                    {% for c in com_dono %}
+                                    <option value="{{ c.item.id }}">
+                                        {{ c.item.identificador }}
+                                        {% if c.item.categoria %} · {{ c.item.categoria.nome }}{% endif %}
+                                        — {{ t('coletorcomp.hoje_com', coletor=c.com_outro.rotulo) }}
+                                        {% if not c.serve %} — {{ t('coletorcomp.nao_serve') }}{% endif %}
+                                    </option>
+                                    {% endfor %}
+                                </optgroup>
+                                {% endif %}
+                            </select>
+                        </div>
+                        <button class="btn btn-sm btn-primary fw-bold w-100" type="submit">
+                            <i class="fa-solid fa-link me-1"></i>{{ t('coletorcomp.btn_vincular') }}
+                        </button>
+                    </form>
+                    {% else %}
+                    <div class="small text-muted">
+                        <i class="fa-solid fa-circle-info me-1"></i>{{ t('coletorcomp.sem_candidatas') }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# Garantia #}
+            <div class="card card-custom shadow-sm mt-4">
+                <div class="card-header bg-white py-3">
+                    <h6 class="mb-0 fw-bold text-dark">
+                        <i class="fa-solid fa-shield-halved me-2 text-muted"></i>{{ t('label.garantia') }}
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0 small">
+                        <dt class="col-5 text-muted">{{ t('label.garantia') }}</dt>
+                        <dd class="col-7 mb-1">
+                            {% if coletor.tem_garantia %}
+                                {% if coletor.validade_garantia %}
+                                    {% if coletor.validade_garantia < hoje %}
+                                    <span class="badge bg-danger">{{ t('historico_coletor.garantia_expirada') }} {{ coletor.validade_garantia.strftime('%d/%m/%Y') }}</span>
+                                    {% else %}
+                                    <span class="badge bg-success">{{ t('historico_coletor.garantia_valida') }} {{ coletor.validade_garantia.strftime('%d/%m/%Y') }}</span>
+                                    {% endif %}
+                                {% else %}
+                                <span class="badge bg-success">Sim</span>
+                                {% endif %}
+                            {% else %}
+                            <span class="text-muted">{{ t('historico_coletor.garantia_nao_registrada') }}</span>
+                            {% endif %}
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    {# ── Checklists de Entrega ── #}
+    {% if coletor.checklists %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card card-custom shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0 fw-bold text-dark">
+                        <i class="fa-solid fa-clipboard-check me-2 text-success"></i>{{ t('historico_coletor.checklists_titulo') }}
+                        <span class="badge bg-success ms-2 fs-6">{{ coletor.checklists|length }}</span>
+                    </h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>{{ t('historico_coletor.col_data') }}</th>
+                                <th>{{ t('historico_coletor.col_analista') }}</th>
+                                <th class="text-center" title="Sem danos físicos visíveis">{{ t('historico_coletor.col_visual') }}</th>
+                                <th class="text-center" title="Bateria carregada/funcionando">{{ t('historico_coletor.col_bateria') }}</th>
+                                <th class="text-center" title="Leitura de barras funcionando">{{ t('historico_coletor.col_leitura') }}</th>
+                                <th class="text-center" title="{{ t('checklist.lacre_ok') }}">{{ t('historico_coletor.col_lacre') }}</th>
+                                <th class="text-center" title="Equipamento limpo para entrega">{{ t('historico_coletor.col_limpeza') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ck in coletor.checklists|sort(attribute='data_hora', reverse=True) %}
+                            <tr>
+                                <td class="text-muted small">{{ ck.data_hora.strftime('%d/%m/%Y %H:%M') }}</td>
+                                <td>{{ ck.analista_nome or ck.analista_re }}</td>
+                                <td class="text-center">
+                                    {% if ck.estado_visual %}<span class="text-success"><i class="fa-solid fa-circle-check"></i></span>
+                                    {% else %}<span class="text-danger"><i class="fa-solid fa-circle-xmark"></i></span>{% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if ck.bateria_ok %}<span class="text-success"><i class="fa-solid fa-circle-check"></i></span>
+                                    {% else %}<span class="text-danger"><i class="fa-solid fa-circle-xmark"></i></span>{% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if ck.leitura_ok %}<span class="text-success"><i class="fa-solid fa-circle-check"></i></span>
+                                    {% else %}<span class="text-danger"><i class="fa-solid fa-circle-xmark"></i></span>{% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if ck.identificacao_ok %}<span class="text-success"><i class="fa-solid fa-circle-check"></i></span>
+                                    {% else %}<span class="text-danger"><i class="fa-solid fa-circle-xmark"></i></span>{% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if ck.equipamento_limpo %}<span class="text-success"><i class="fa-solid fa-circle-check"></i></span>
+                                    {% else %}<span class="text-danger"><i class="fa-solid fa-circle-xmark"></i></span>{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+<script>const RECEBI_CONFIRMA = "{{ t('pendcomp.confirmar_recebimento') }}";</script>
+{% endblock %}

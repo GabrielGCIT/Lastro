@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ t('reset.definir_titulo') }} | MBAssets</title>
+    <link href="{{ url_for('static', filename='vendor/bootstrap-5.3.0/css/bootstrap.min.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome-6.4.0/css/all.min.css') }}">
+
+    <style>
+        :root {
+            --mb-blue:       #0d1628;
+            --mb-green:      #7AC143;
+            --mb-green-dark: #5a9e2f;
+        }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f6f9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .card-reset {
+            width: 100%;
+            max-width: 420px;
+            background: #ffffff;
+            border-radius: 14px;
+            box-shadow: 0 10px 40px rgba(13, 22, 40, 0.08);
+            padding: 40px 36px;
+        }
+        .brand-mini {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 28px;
+        }
+        .brand-mini-icon {
+            width: 38px; height: 38px;
+            background-color: var(--mb-green);
+            border-radius: 9px;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--mb-blue);
+        }
+        .brand-mini-text { font-weight: 700; font-size: 1.1rem; color: var(--mb-blue); }
+        h1 { font-size: 1.3rem; font-weight: 700; color: #0f172a; margin-bottom: 6px; }
+        .subtitle { color: #64748b; font-size: 0.875rem; margin-bottom: 24px; }
+        .form-label {
+            font-weight: 600; font-size: 0.8rem; color: #374151;
+            text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;
+        }
+        .form-control {
+            border: 1.5px solid #e2e8f0; border-radius: 8px;
+            padding: 11px 14px; font-size: 0.9rem;
+        }
+        .form-control:focus {
+            border-color: var(--mb-green);
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--mb-green) 15%, transparent);
+        }
+        .btn-acao {
+            background-color: var(--mb-blue); color: #ffffff;
+            font-weight: 600; padding: 12px; border: none; border-radius: 8px;
+            font-size: 0.9rem; width: 100%;
+        }
+        .btn-acao:hover { background-color: #162040; color: #ffffff; }
+        .link-voltar {
+            color: #64748b; font-size: 0.82rem; text-decoration: none;
+        }
+        .link-voltar:hover { color: var(--mb-green-dark); text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="card-reset">
+        <div class="brand-mini">
+            <div class="brand-mini-icon"><i class="fa-solid fa-boxes-stacked"></i></div>
+            <div class="brand-mini-text">MBAssets</div>
+        </div>
+
+        <h1>{{ t('reset.definir_titulo') }}</h1>
+        <p class="subtitle">{{ t('reset.definir_instrucao') }}</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} py-2 small text-center mb-4 border-0 rounded-3">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form action="{{ url_for('auth.redefinir_senha', token=token) }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="mb-3">
+                <label class="form-label">{{ t('reset.nova_senha') }}</label>
+                <input type="password" class="form-control" name="senha_nova"
+                       minlength="6" required autofocus autocomplete="new-password">
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label">{{ t('reset.confirmar_senha') }}</label>
+                <input type="password" class="form-control" name="senha_confirmacao"
+                       minlength="6" required autocomplete="new-password">
+            </div>
+
+            <button type="submit" class="btn-acao">
+                <i class="fa-solid fa-key me-2"></i>{{ t('reset.btn_redefinir') }}
+            </button>
+        </form>
+
+        <div class="text-center mt-4">
+            <a href="{{ url_for('auth.login') }}" class="link-voltar">
+                <i class="fa-solid fa-arrow-left me-1"></i>{{ t('reset.voltar') }}
+            </a>
+        </div>
+    </div>
+</body>
+</html>

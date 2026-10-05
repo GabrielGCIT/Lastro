@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block sidebar_nav %}
+<nav class="nav flex-column px-2 sidebar-nav">
+
+    {# Voltar à operação #}
+    <a class="sidebar-link mb-3"
+       href="{{ url_for('dashboard.index') }}"
+       style="color: var(--mb-green); opacity: 0.85;">
+        <i class="fa-solid fa-arrow-left me-2" style="font-size:0.75rem;"></i>{{ t('btn.voltar') }}
+    </a>
+
+    {% if has_permissao('admin.usuarios') or has_permissao('admin.grupos') or
+          has_permissao('admin.localidades') or has_permissao('admin.colaboradores') or
+          has_permissao('auditoria.ver') %}
+    <span class="sidebar-label mb-2">{{ t('nav.administracao') }}</span>
+    {% endif %}
+
+    {% if has_permissao('admin.usuarios') %}
+    <a class="sidebar-link {{ 'active' if request.endpoint == 'dashboard.gerenciar_usuarios' else '' }}"
+       href="{{ url_for('dashboard.gerenciar_usuarios') }}">
+        <i class="fa-solid fa-users"></i> {{ t('nav.usuarios') }}
+    </a>
+    {% endif %}
+
+    {% if has_permissao('admin.grupos') %}
+    <a class="sidebar-link {{ 'active' if request.endpoint == 'dashboard.gerenciar_grupos' else '' }}"
+       href="{{ url_for('dashboard.gerenciar_grupos') }}">
+        <i class="fa-solid fa-shield-halved"></i> {{ t('nav.grupos_permissoes') }}
+    </a>
+    {% endif %}
+
+    {% if has_permissao('admin.localidades') %}
+    <a class="sidebar-link {{ 'active' if request.endpoint == 'coletores.gerenciar_localidades' else '' }}"
+       href="{{ url_for('coletores.gerenciar_localidades') }}">
+        <i class="fa-solid fa-location-dot"></i> {{ t('nav.localidades') }}
+    </a>
+    <a class="sidebar-link {{ 'active' if request.endpoint == 'coletores.gerenciar_paises' else '' }}"
+       href="{{ url_for('coletores.gerenciar_paises') }}">
+        <i class="fa-solid fa-globe"></i> {{ t('nav.paises') }}
+    </a>
+    {% endif %}
+
+    {% if has_permissao('admin.colaboradores') %}
+    <a class="sidebar-link {{ 'active' if request.endpoint and request.endpoint.startswith('colaboradores.') else '' }}"
+       href="{{ url_for('colaboradores.lista') }}">
+        <i class="fa-solid fa-people-group"></i> {{ t('nav.colaboradores') }}
+    </a>
+    {% endif %}
+
+    {% if has_permissao('auditoria.ver') %}
+    <a class="sidebar-link {{ 'active' if request.endpoint == 'dashboard.auditoria' else '' }}"
+       href="{{ url_for('dashboard.auditoria') }}"
+       style="{{ 'color: rgba(220,53,69,0.8)' if request.endpoint != 'dashboard.auditoria' else '' }}">
+        <i class="fa-solid fa-eye"></i> {{ t('nav.auditoria') }}
+    </a>
+    {% endif %}
+
+</nav>
+{% endblock sidebar_nav %}

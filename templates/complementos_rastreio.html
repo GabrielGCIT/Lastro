@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}{{ t('rastreio.titulo') }}{% endblock %}
+
+{# Pacote H / H5, enxugada na B5 — onde está cada PEÇA agora.
+
+   Nasceu com duas seções, porque a D4 tem dois modos: peça identificada tem
+   lugar exato, bateria tem quantidade e portador. A segunda seção saiu na B5:
+   ela virava uma tabela de saldos por CD, que é o que os cards da tela de
+   Baterias passaram a mostrar — com mais clareza e no lugar certo.
+
+   Some junto a explicação de por que bateria não aparece uma a uma. Sem
+   bateria na tela, não há o que explicar; o aviso viraria resposta a uma
+   pergunta que ninguém mais faz aqui. #}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+
+    <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-4">
+        <div>
+            <h2 class="fw-bold text-dark mb-1">
+                <i class="fa-solid fa-location-crosshairs me-2"></i>{{ t('rastreio.titulo') }}
+            </h2>
+            <p class="text-muted mb-0 small">
+                {{ t('rastreio.subtitulo') }}
+                <span class="ms-1">{{ t('rastreio.prazo_vigente') }}: <strong>{{ prazo }}h</strong></span>
+            </p>
+        </div>
+        <a href="{{ url_for('complementos.index') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fa-solid fa-plug-circle-plus me-1"></i>{{ t('rastreio.ir_catalogo') }}
+        </a>
+    </div>
+
+    {# O total fora do prazo antes de qualquer tabela: quem abre esta tela quer
+       saber se TEM problema antes de saber qual é. #}
+    {% if fora_de_prazo %}
+    <div class="alert alert-danger d-flex align-items-center gap-3 mb-4 shadow-sm">
+        <i class="fa-solid fa-clock fa-2x"></i>
+        <div class="flex-fill">
+            <strong>{{ fora_de_prazo }}</strong> {{ t('rastreio.banner_atraso') }}
+        </div>
+    </div>
+    {% endif %}
+
+    {# ---------------- FILTROS ---------------- #}
+    <form method="GET" action="{{ url_for('complementos.rastreio') }}"
+          class="card card-custom p-3 mb-4">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label small fw-bold text-muted text-uppercase">
+                    {{ t('label.localidade') }}
+                </label>
+                <select name="localidade" class="form-select form-select-sm">
+                    <option value="">{{ t('rastreio.todas_localidades') }}</option>
+                    {% for l in localidades %}
+                    <option value="{{ l.id }}" {{ 'selected' if filtro_loc == l.id }}>
+                        {{ l.sigla }} — {{ l.nome }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" name="atrasados"
+                           value="1" id="soAtrasados" {{ 'checked' if so_atrasados }}>
+                    <label class="form-check-label small fw-bold" for="soAtrasados">
+                        {{ t('rastreio.so_atrasados') }}
+                    </label>
+                </div>
+            </div>
+            <div class="col-md-4 text-end">
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="fa-solid fa-filter me-1"></i>{{ t('btn.filtrar') }}
+                </button>
+                {% if filtro_loc or so_atrasados %}
+                <a href="{{ url_for('complementos.rastreio') }}"
+                   class="btn btn-outline-secondary btn-sm">{{ t('btn.limpar') }}</a>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+
+    {# ---------------- PEÇAS IDENTIFICADAS ---------------- #}
+    <div class="card card-custom border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-3">
+            <h5 class="fw-bold mb-0">{{ t('rastreio.itens_titulo') }}</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr class="small text-uppercase text-muted">
+                        <th>{{ t('rastreio.col_peca') }}</th>
+                        <th>{{ t('rastreio.col_categoria') }}</th>
+                        <th>{{ t('rastreio.col_onde') }}</th>
+                        <th>{{ t('rastreio.col_desde') }}</th>
+                        <th class="text-end">{{ t('rastreio.col_tempo') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in itens %}
+                    {% set atrasado = r.estado not in ('ESTOQUE', 'NO_PRAZO') %}
+                    <tr class="{{ 'table-danger' if atrasado else '' }}">
+                        <td class="fw-bold font-monospace">{{ r.item.identificador }}</td>
+                        <td>{{ r.categoria }}</td>
+                        <td>
+                            {% if r.estado == 'ESTOQUE' %}
+                                <span class="badge rounded-pill bg-success px-2 py-1">
+                                    <i class="fa-solid fa-warehouse me-1"></i>{{ t('rastreio.em_estoque') }}
+                                </span>
+                                <span class="text-muted small ms-1">
+                                    {{ r.localidade.sigla if r.localidade else t('rastreio.sem_cd') }}
+                                </span>
+                            {% else %}
+                                {% if r.estado == 'FALTOU' %}
+                                <span class="badge rounded-pill bg-danger px-2 py-1">
+                                    <i class="fa-solid fa-triangle-exclamation me-1"></i>{{ t('rastreio.nao_voltou') }}
+                                </span>
+                                {% elif r.estado == 'ATRASADO' %}
+                                <span class="badge rounded-pill bg-danger px-2 py-1">
+                                    <i class="fa-solid fa-clock me-1"></i>{{ t('rastreio.atrasado') }}
+                                </span>
+                                {% else %}
+                                <span class="badge rounded-pill bg-warning text-dark px-2 py-1">
+                                    <i class="fa-solid fa-person-walking me-1"></i>{{ t('rastreio.em_campo') }}
+                                </span>
+                                {% endif %}
+                                <div class="small mt-1">
+                                    <strong>{{ r.colaborador.nome if r.colaborador else 'RE ' ~ r.re }}</strong>
+                                    {% if r.colaborador %}<span class="text-muted">· RE {{ r.colaborador.re }}</span>{% endif %}
+                                    {% if r.coletor %}
+                                    <span class="text-muted">· {{ t('rastreio.no_coletor') }}
+                                        <a href="{{ url_for('dashboard.historico_coletor', coletor_id=r.coletor.id) }}"
+                                           class="text-decoration-none">{{ r.coletor.rotulo }}</a>
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                {% if r.coletor_voltou %}
+                                {# O coletor voltar sem a peça é o sinal mais forte de
+                                   cobrança que existe: alguém devolveu e ficou com ela. #}
+                                <div class="small text-danger">
+                                    {{ t('rastreio.coletor_voltou_em') }}
+                                    {{ r.coletor_voltou.strftime('%d/%m/%Y %H:%M') }}
+                                </div>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td class="small">
+                            {{ r.desde.strftime('%d/%m/%Y %H:%M') if r.desde else '—' }}
+                        </td>
+                        <td class="text-end small {{ 'text-danger fw-bold' if atrasado else 'text-muted' }}">
+                            {{ tempo_fora(r.horas_fora) if r.desde else '—' }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-4">
+                            {{ t('rastreio.sem_itens') }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

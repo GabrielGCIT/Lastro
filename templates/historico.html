@@ -1,0 +1,59 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Histórico{% endblock %}
+{% block content %}
+<div class="container-fluid fade-in">
+    <div class="page-header">
+        <h2 class="h3 fw-bold text-dark"><i class="fa-solid fa-clock-rotate-left me-2"></i>{{ t('historico.titulo') }}</h2>
+        <a href="{{ url_for('dashboard.exportar_excel') }}" class="btn btn-success fw-bold">
+            <i class="fa-solid fa-file-excel me-2"></i>{{ t('historico.btn_exportar') }}
+        </a>
+    </div>
+
+    <div class="card card-custom border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light">
+                    <tr>
+                        <th>{{ t('historico.col_ativo') }}</th>
+                        <th>{{ t('historico.col_colaborador') }}</th>
+                        <th>{{ t('historico.col_saida') }}</th>
+                        <th>{{ t('historico.col_retorno') }}</th>
+                        <th>{{ t('historico.col_lacre') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in movimentacoes %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('dashboard.historico_coletor', coletor_id=m.coletor.id) }}"
+                               class="fw-bold text-decoration-none">
+                                {{ m.coletor.rotulo }}
+                            </a>
+                        </td>
+                        <td>{{ m.re_colaborador }}</td>
+                        <td>{{ m.data_saida.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td>
+                            {% if m.data_retorno %}
+                                {{ m.data_retorno.strftime('%d/%m/%Y %H:%M') }}
+                            {% else %}
+                                <span class="badge bg-warning text-dark">{{ t('historico.status_em_uso') }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if m.status_identificacao_retorno == 'ROMPIDO' or 'Suspenso' in (m.status_identificacao_retorno or '') %}
+                                <span class="badge bg-dark">{{ t('historico.status_violado') }}</span>
+                            {% elif m.status_identificacao_retorno == 'OK' %}
+                                <span class="badge bg-success">OK</span>
+                            {% else %}
+                                <small class="text-muted">-</small>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acesso | MBAssets</title>
+    <link href="{{ url_for('static', filename='vendor/bootstrap-5.3.0/css/bootstrap.min.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome-6.4.0/css/all.min.css') }}">
+
+    <style>
+        :root {
+            --mb-blue:       #0d1628;
+            --mb-dark-1:     #1e1f22;
+            --mb-green:      #7AC143;
+            --mb-green-dark: #5a9e2f;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+        }
+
+        /* ── Painel esquerdo — branding ── */
+        .panel-brand {
+            background-color: var(--mb-blue);
+            width: 45%;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 48px 40px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Decoração geométrica de fundo */
+        .panel-brand::before {
+            content: '';
+            position: absolute;
+            width: 420px;
+            height: 420px;
+            border-radius: 50%;
+            border: 60px solid color-mix(in srgb, var(--mb-green) 6%, transparent);
+            top: -80px;
+            right: -120px;
+        }
+        .panel-brand::after {
+            content: '';
+            position: absolute;
+            width: 280px;
+            height: 280px;
+            border-radius: 50%;
+            border: 40px solid color-mix(in srgb, var(--mb-green) 4%, transparent);
+            bottom: 60px;
+            left: -80px;
+        }
+
+        .brand-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            position: relative;
+            z-index: 1;
+        }
+        .brand-logo-icon {
+            width: 44px;
+            height: 44px;
+            background-color: var(--mb-green);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--mb-blue);
+            font-size: 1.2rem;
+        }
+        .brand-logo-text {
+            color: #ffffff;
+            font-size: 1.25rem;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            line-height: 1;
+        }
+        .brand-logo-sub {
+            color: rgba(255,255,255,0.4);
+            font-size: 0.7rem;
+            margin-top: 2px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .brand-main {
+            position: relative;
+            z-index: 1;
+        }
+        .brand-main h1 {
+            color: #ffffff;
+            font-size: 2rem;
+            font-weight: 700;
+            line-height: 1.25;
+            margin-bottom: 16px;
+        }
+        .brand-main h1 span { color: var(--mb-green); }
+        .brand-main p {
+            color: rgba(255,255,255,0.5);
+            font-size: 0.9rem;
+            line-height: 1.7;
+            max-width: 320px;
+        }
+
+        .brand-features {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 32px;
+        }
+        .brand-feature {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .brand-feature-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            background-color: color-mix(in srgb, var(--mb-green) 10%, transparent);
+            border: 1px solid color-mix(in srgb, var(--mb-green) 20%, transparent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--mb-green);
+            font-size: 0.8rem;
+            flex-shrink: 0;
+        }
+        .brand-feature-text {
+            color: rgba(255,255,255,0.6);
+            font-size: 0.82rem;
+        }
+
+        .brand-footer {
+            position: relative;
+            z-index: 1;
+            color: rgba(255,255,255,0.2);
+            font-size: 0.72rem;
+        }
+
+        /* ── Painel direito — formulário ── */
+        .panel-form {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 48px 40px;
+            background-color: #f4f6f9;
+        }
+
+        .form-card {
+            width: 100%;
+            max-width: 380px;
+        }
+
+        .form-card h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 4px;
+        }
+        .form-card .form-subtitle {
+            color: #64748b;
+            font-size: 0.875rem;
+            margin-bottom: 32px;
+        }
+
+        .form-label {
+            font-weight: 600;
+            font-size: 0.8rem;
+            color: #374151;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 6px;
+        }
+        .form-control {
+            border: 1.5px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 11px 14px;
+            font-size: 0.9rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            background-color: #ffffff;
+        }
+        .form-control:focus {
+            border-color: var(--mb-green);
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--mb-green) 15%, transparent);
+            outline: none;
+        }
+        .input-group .form-control { border-left: none; border-radius: 0 8px 8px 0; }
+        .input-group-text {
+            background-color: #ffffff;
+            border: 1.5px solid #e2e8f0;
+            border-right: none;
+            border-radius: 8px 0 0 8px;
+            color: #94a3b8;
+            padding: 11px 14px;
+        }
+        .input-group:focus-within .input-group-text {
+            border-color: var(--mb-green);
+        }
+
+        .btn-login {
+            background-color: var(--mb-blue);
+            color: #ffffff;
+            font-weight: 600;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            letter-spacing: 0.03em;
+            transition: background-color 0.2s, transform 0.1s;
+            width: 100%;
+        }
+        .btn-login:hover {
+            background-color: #162040;
+            color: #ffffff;
+        }
+        .btn-login:active { transform: scale(0.99); }
+
+        .form-footer {
+            color: #94a3b8;
+            font-size: 0.72rem;
+            text-align: center;
+            margin-top: 24px;
+        }
+
+        .link-esqueci {
+            color: #64748b;
+            font-size: 0.82rem;
+            text-decoration: none;
+        }
+        .link-esqueci:hover {
+            color: var(--mb-green-dark);
+            text-decoration: underline;
+        }
+
+        /* ── Responsivo: mobile empilha ── */
+        @media (max-width: 767px) {
+            body { flex-direction: column; }
+            .panel-brand {
+                width: 100%;
+                min-height: auto;
+                padding: 32px 24px;
+            }
+            .brand-main h1  { font-size: 1.5rem; }
+            .brand-features { display: none; }
+            .panel-form     { padding: 32px 24px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ── Painel esquerdo — branding ── -->
+    <div class="panel-brand">
+
+        <div class="brand-logo">
+            <div class="brand-logo-icon">
+                <i class="fa-solid fa-boxes-stacked"></i>
+            </div>
+            <div>
+                <div class="brand-logo-text">MBAssets</div>
+                <div class="brand-logo-sub">{{ t('login.brand_sub') }}</div>
+            </div>
+        </div>
+
+        <div class="brand-main">
+            <h1>{{ t('login.brand_headline') }}</h1>
+            <p>{{ t('login.brand_desc') }}</p>
+
+            <div class="brand-features">
+                <div class="brand-feature">
+                    <div class="brand-feature-icon"><i class="fa-solid fa-mobile-screen"></i></div>
+                    <div class="brand-feature-text">{{ t('login.feature1') }}</div>
+                </div>
+                <div class="brand-feature">
+                    <div class="brand-feature-icon"><i class="fa-solid fa-car-battery"></i></div>
+                    <div class="brand-feature-text">{{ t('login.feature2') }}</div>
+                </div>
+                <div class="brand-feature">
+                    <div class="brand-feature-icon"><i class="fa-solid fa-location-crosshairs"></i></div>
+                    <div class="brand-feature-text">{{ t('login.feature3') }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="brand-footer">
+            MBAssets &copy; 2026 &nbsp;·&nbsp; Gabriel Garcia de Carvalho
+        </div>
+
+    </div>
+
+    <!-- ── Painel direito — formulário ── -->
+    <div class="panel-form">
+        <div class="form-card">
+
+            <h2>{{ t('login.boas_vindas') }}</h2>
+            <p class="form-subtitle">{{ t('login.subtitulo') }}</p>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} py-2 small text-center mb-4 border-0 rounded-3">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form action="{{ url_for('auth.login') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <div class="mb-3">
+                    <label class="form-label">{{ t('label.email') }}</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fa-solid fa-envelope"></i></span>
+                        <input type="email" class="form-control" name="email"
+                               placeholder="{{ t('login.placeholder_email') }}" required autofocus
+                               autocomplete="username">
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label">{{ t('label.senha') }}</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fa-solid fa-lock"></i></span>
+                        <input type="password" class="form-control" name="senha"
+                               placeholder="••••••••" required autocomplete="current-password">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-login">
+                    <i class="fa-solid fa-right-to-bracket me-2"></i>{{ t('login.btn_acessar') }}
+                </button>
+
+                <div class="text-center mt-3">
+                    <a href="{{ url_for('auth.esqueci_senha') }}" class="link-esqueci">
+                        {{ t('login.esqueci') }}
+                    </a>
+                </div>
+
+            </form>
+
+            <div class="form-footer">
+                {{ t('login.rodape') }}
+            </div>
+
+        </div>
+    </div>
+
+</body>
+</html>

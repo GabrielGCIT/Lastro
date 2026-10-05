@@ -1,0 +1,201 @@
+{% extends "base_hub.html" %}
+
+{% block title %}Auditoria{% endblock %}
+{% block content %}
+<div class="container-fluid fade-in">
+    <div class="page-header">
+        <div>
+            <h2 class="h3 text-dark fw-bold"><i class="fa-solid fa-shield-halved me-2"></i>{{ t('auditoria.titulo') }}</h2>
+            <p class="text-muted small mb-0">{{ t('auditoria.subtitulo') }}</p>
+        </div>
+        <div>
+            <span class="badge bg-dark">{{ t('auditoria.acesso_restrito') }}</span>
+        </div>
+    </div>
+
+    {# ── Barra de filtros ── #}
+    <div class="card card-custom shadow-sm border-0 mb-3">
+        <div class="card-body py-3">
+            <form method="get" action="{{ url_for('dashboard.auditoria') }}" class="row g-2 align-items-end">
+
+                {# Busca livre #}
+                <div class="col-12 col-md-3">
+                    <label class="form-label small fw-semibold mb-1">{{ t('auditoria.col_busca') }}</label>
+                    <input type="text"
+                           name="busca"
+                           class="form-control form-control-sm"
+                           placeholder="{{ t('auditoria.busca_placeholder') }}"
+                           value="{{ busca }}">
+                </div>
+
+                {# Filtro por ação #}
+                <div class="col-12 col-md-2">
+                    <label class="form-label small fw-semibold mb-1">{{ t('auditoria.col_acao') }}</label>
+                    <select name="acao" class="form-select form-select-sm">
+                        <option value="">{{ t('auditoria.todas_acoes') }}</option>
+                        {% for a in acoes_disponiveis %}
+                        <option value="{{ a }}" {% if filtro_acao == a %}selected{% endif %}>{{ a }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                {# Data início #}
+                <div class="col-6 col-md-2">
+                    <label class="form-label small fw-semibold mb-1">{{ t('auditoria.data_inicio') }}</label>
+                    <input type="date"
+                           name="data_inicio"
+                           class="form-control form-control-sm"
+                           value="{{ data_inicio }}">
+                </div>
+
+                {# Data fim #}
+                <div class="col-6 col-md-2">
+                    <label class="form-label small fw-semibold mb-1">{{ t('auditoria.data_fim') }}</label>
+                    <input type="date"
+                           name="data_fim"
+                           class="form-control form-control-sm"
+                           value="{{ data_fim }}">
+                </div>
+
+                {# Registros por página #}
+                <div class="col-6 col-md-1">
+                    <label class="form-label small fw-semibold mb-1">{{ t('auditoria.por_pagina') }}</label>
+                    <select name="per_page" class="form-select form-select-sm">
+                        {% for n in [50, 100, 200, 300, 400, 500] %}
+                        <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                {# Botões #}
+                <div class="col-6 col-md-2 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm flex-fill">
+                        <i class="fa-solid fa-magnifying-glass me-1"></i>{{ t('auditoria.btn_filtrar') }}
+                    </button>
+                    <a href="{{ url_for('dashboard.auditoria') }}" class="btn btn-outline-secondary btn-sm flex-fill" data-no-loading>
+                        <i class="fa-solid fa-xmark me-1"></i>{{ t('auditoria.btn_limpar') }}
+                    </a>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+    {# ── Tabela de logs ── #}
+    <div class="card card-custom shadow-sm border-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size: 0.9rem;">
+                <thead class="bg-light">
+                    <tr>
+                        <th style="width: 15%">{{ t('auditoria.col_data') }}</th>
+                        <th style="width: 15%">{{ t('auditoria.col_usuario') }}</th>
+                        <th style="width: 15%">{{ t('auditoria.col_acao') }}</th>
+                        <th>{{ t('auditoria.col_detalhes') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if logs %}
+                        {% for log in logs %}
+                        <tr>
+                            <td class="text-muted font-monospace">
+                                {{ log.data_hora.strftime('%d/%m/%Y %H:%M:%S') }}
+                            </td>
+                            <td class="fw-bold text-dark">
+                                <i class="fa-solid fa-user me-2 text-secondary"></i>{{ log.usuario }}
+                            </td>
+                            <td>
+                                {% if 'CREATE' in log.acao %}
+                                    <span class="badge bg-success bg-opacity-10 text-success border border-success">{{ t('auditoria.acao_criar') }}</span>
+                                {% elif 'UPDATE' in log.acao %}
+                                    <span class="badge bg-warning bg-opacity-10 text-warning border border-warning">{{ t('auditoria.acao_alterar') }}</span>
+                                {% elif 'DELETE' in log.acao %}
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger">{{ t('auditoria.acao_excluir') }}</span>
+                                {% elif 'LOGIN' in log.acao or 'LOGOUT' in log.acao %}
+                                    <span class="badge bg-info bg-opacity-10 text-info border border-info">{{ t('auditoria.acao_acesso') }}</span>
+                                {% elif 'CHECK' in log.acao %}
+                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary">{{ t('auditoria.acao_operacao') }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ log.acao }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-secondary">
+                                {{ log.detalhe }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted py-5">
+                                <i class="fa-solid fa-magnifying-glass fa-2x mb-2 d-block opacity-25"></i>
+                                {{ t('auditoria.sem_registros') }}
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        {# ── Paginação + rodapé ── #}
+        <div class="card-footer bg-white d-flex flex-column flex-sm-row align-items-center justify-content-between gap-2 py-2">
+
+            {# Info de total #}
+            <span class="text-muted small">
+                {{ t('auditoria.paginacao_info',
+                     pagina=paginacao.page,
+                     total_paginas=paginacao.pages or 1,
+                     total=paginacao.total) }}
+            </span>
+
+            {# Controles de página #}
+            {% if paginacao.pages and paginacao.pages > 1 %}
+            <nav aria-label="Paginação auditoria">
+                <ul class="pagination pagination-sm mb-0">
+
+                    {# Anterior #}
+                    <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+                        <a class="page-link"
+                           href="{{ url_for('dashboard.auditoria', page=paginacao.prev_num, per_page=per_page, busca=busca, acao=filtro_acao, data_inicio=data_inicio, data_fim=data_fim) }}"
+                           {% if not paginacao.has_prev %}tabindex="-1" aria-disabled="true"{% endif %}>
+                            <i class="fa-solid fa-chevron-left"></i>
+                        </a>
+                    </li>
+
+                    {# Janela de páginas: até 7 botões centrados na atual #}
+                    {% set win_start = [paginacao.page - 3, 1] | max %}
+                    {% set win_end   = [win_start + 6, paginacao.pages] | min %}
+                    {% set win_start = [win_end - 6, 1] | max %}
+
+                    {% if win_start > 1 %}
+                    <li class="page-item disabled"><span class="page-link">…</span></li>
+                    {% endif %}
+
+                    {% for p in range(win_start, win_end + 1) %}
+                    <li class="page-item {% if p == paginacao.page %}active{% endif %}">
+                        <a class="page-link"
+                           href="{{ url_for('dashboard.auditoria', page=p, per_page=per_page, busca=busca, acao=filtro_acao, data_inicio=data_inicio, data_fim=data_fim) }}">
+                            {{ p }}
+                        </a>
+                    </li>
+                    {% endfor %}
+
+                    {% if win_end < paginacao.pages %}
+                    <li class="page-item disabled"><span class="page-link">…</span></li>
+                    {% endif %}
+
+                    {# Próximo #}
+                    <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+                        <a class="page-link"
+                           href="{{ url_for('dashboard.auditoria', page=paginacao.next_num, per_page=per_page, busca=busca, acao=filtro_acao, data_inicio=data_inicio, data_fim=data_fim) }}"
+                           {% if not paginacao.has_next %}tabindex="-1" aria-disabled="true"{% endif %}>
+                            <i class="fa-solid fa-chevron-right"></i>
+                        </a>
+                    </li>
+
+                </ul>
+            </nav>
+            {% endif %}
+
+        </div>
+    </div>
+</div>
+{% endblock %}

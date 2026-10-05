@@ -1,0 +1,435 @@
+﻿{% extends "base.html" %}
+
+{% block title %}{{ t('painel_op.titulo') }}{% endblock %}
+{% block content %}
+<div class="container-fluid fade-in">
+
+    {# ── Cabeçalho ── #}
+    <div class="page-header">
+        <div>
+            <h2 class="h3 text-dark fw-bold"><i class="fa-solid fa-chart-bar me-2"></i>{{ t('painel_op.titulo') }}</h2>
+            <p class="text-muted small mb-0">
+                {{ t('painel_op.subtitulo_prefixo') }} {{ now.strftime('%d/%m/%Y às %H:%M') }}
+            </p>
+        </div>
+        <a href="{{ url_for('dashboard.exportar_excel') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fa-solid fa-file-csv me-1"></i> {{ t('painel_op.btn_exportar') }}
+        </a>
+    </div>
+
+    {# ══════════════ KPIs ══════════════ #}
+    <div class="row g-3 mb-4">
+
+        <div class="col-6 col-md-3">
+            <div class="card card-custom border-top border-3 border-dark h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted small mb-1 text-uppercase fw-bold">{{ t('painel_op.kpi_total') }}</p>
+                            <h3 class="fw-bold mb-0">{{ total_movimentacoes }}</h3>
+                            <small class="text-muted">{{ t('painel_op.kpi_total_sub') }}</small>
+                        </div>
+                        <i class="fa-solid fa-right-left fa-2x text-muted opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-6 col-md-3">
+            <div class="card card-custom border-top border-3 border-warning h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted small mb-1 text-uppercase fw-bold">{{ t('painel_op.kpi_campo') }}</p>
+                            <h3 class="fw-bold mb-0">{{ em_uso_count }}</h3>
+                            <small class="text-muted">{{ t('painel_op.kpi_campo_sub') }}</small>
+                        </div>
+                        <i class="fa-solid fa-mobile-screen fa-2x text-warning opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-6 col-md-3">
+            <div class="card card-custom border-top border-3 border-success h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted small mb-1 text-uppercase fw-bold">{{ t('painel_op.kpi_disp') }}</p>
+                            <h3 class="fw-bold mb-0">{{ disponiveis }}</h3>
+                            <small class="text-muted">{{ t('painel_op.kpi_disp_sub') }}</small>
+                        </div>
+                        <i class="fa-solid fa-circle-check fa-2x text-success opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-6 col-md-3">
+            <div class="card card-custom border-top border-3 border-info h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted small mb-1 text-uppercase fw-bold">{{ t('painel_op.kpi_tempo') }}</p>
+                            <h3 class="fw-bold mb-0">{{ tempo_medio_horas }}h</h3>
+                            <small class="text-muted">{{ t('painel_op.kpi_tempo_sub') }}</small>
+                        </div>
+                        <i class="fa-solid fa-clock fa-2x text-info opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    {# ══════════════ GRÁFICOS ══════════════ #}
+    {% if grafico_coletores_dados or grafico_colab_dados %}
+    <div class="row g-3 mb-4">
+
+        {% if grafico_coletores_dados %}
+        <div class="col-lg-6">
+            <div class="card card-custom h-100">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h6 class="fw-bold mb-0"><i class="fa-solid fa-mobile-screen me-2 text-dark"></i>{{ t('painel_op.grafico_coletores') }}</h6>
+                    <small class="text-muted">{{ t('painel_op.grafico_coletores_sub') }}</small>
+                </div>
+                <div class="card-body">
+                    <canvas id="chartColetores" height="260"></canvas>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if grafico_colab_dados %}
+        <div class="col-lg-6">
+            <div class="card card-custom h-100">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h6 class="fw-bold mb-0"><i class="fa-solid fa-users me-2 text-dark"></i>{{ t('painel_op.grafico_colab') }}</h6>
+                    <small class="text-muted">{{ t('painel_op.grafico_colab_sub') }}</small>
+                </div>
+                <div class="card-body">
+                    <canvas id="chartColaboradores" height="260"></canvas>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+    </div>
+    {% endif %}
+
+    {# ══════════════ LINHA 3: STATUS + DEFEITOS + LOCALIDADES ══════════════ #}
+    {% set STATUS_LABELS = {
+        'Disponível':   t('status.disponivel'),
+        'Em Uso':       t('status.em_uso'),
+        'Manutenção':   t('status.manutencao'),
+        'Suspenso':     t('status.suspenso'),
+    } %}
+    <div class="row g-3 mb-4">
+
+        {# Status da frota #}
+        <div class="col-md-4">
+            <div class="card card-custom h-100">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h6 class="fw-bold mb-0"><i class="fa-solid fa-layer-group me-2 text-dark"></i>{{ t('painel_op.status_frota') }}</h6>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush">
+                        {% set status_config = {
+                            'Disponível':   ('success',  'circle-check'),
+                            'Em Uso':       ('warning',  'mobile-screen'),
+                            'Manutenção':   ('danger',   'screwdriver-wrench'),
+                            'Suspenso':     ('dark',     'ban'),
+                        } %}
+                        {% for status_nome, qtd in status_dist.items() | sort(attribute='1', reverse=True) %}
+                        {% set cfg = status_config.get(status_nome, ('secondary', 'circle')) %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center py-2">
+                            <span class="small">
+                                <i class="fa-solid fa-{{ cfg[1] }} text-{{ cfg[0] }} me-2"></i>
+                                {{ STATUS_LABELS.get(status_nome, status_nome) }}
+                            </span>
+                            <span class="badge bg-{{ cfg[0] }} rounded-pill">{{ qtd }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        {# Top defeitos atuais #}
+        <div class="col-md-4">
+            <div class="card card-custom h-100">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h6 class="fw-bold mb-0"><i class="fa-solid fa-triangle-exclamation me-2 text-danger"></i>{{ t('painel_op.defeitos') }}</h6>
+                    <small class="text-muted">{{ t('painel_op.defeitos_sub') }}</small>
+                </div>
+                <div class="card-body p-0">
+                    {% if top_defeitos %}
+                    {% set total_defeitos = top_defeitos | sum(attribute='1') %}
+                    <ul class="list-group list-group-flush">
+                        {% for cat, qtd in top_defeitos %}
+                        <li class="list-group-item py-2">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <small class="fw-bold">
+                                    {% if cat == 'FISICO' %}<i class="fa-solid fa-mobile-screen-button me-1 text-danger"></i>{{ t('coletores.defeito.fisico') }}
+                                    {% elif cat == 'HARDWARE' %}<i class="fa-solid fa-microchip me-1 text-danger"></i>{{ t('coletores.defeito.hardware') }}
+                                    {% elif cat == 'SISTEMA' %}<i class="fa-solid fa-bug me-1 text-warning"></i>{{ t('coletores.defeito.sistema') }}
+                                    {% else %}<i class="fa-solid fa-circle-question me-1 text-muted"></i>{{ cat }}
+                                    {% endif %}
+                                </small>
+                                <span class="badge bg-danger rounded-pill">{{ qtd }}</span>
+                            </div>
+                            <div class="progress" style="height: 4px;">
+                                <div class="progress-bar bg-danger"
+                                     style="width: {{ (qtd / total_defeitos * 100)|int }}%"></div>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <div class="text-center py-4 text-muted small">
+                        <i class="fa-solid fa-circle-check fa-2x mb-2 text-success d-block"></i>
+                        {{ t('painel_op.sem_defeitos') }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {# Distribuição por localidade #}
+        <div class="col-md-4">
+            <div class="card card-custom h-100">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h6 class="fw-bold mb-0"><i class="fa-solid fa-location-dot me-2 text-dark"></i>{{ t('painel_op.frota_localidade') }}</h6>
+                    <small class="text-muted">{{ t('painel_op.frota_loc_sub') }}</small>
+                </div>
+                <div class="card-body p-0">
+                    {% if por_localidade %}
+                    {% set total_loc = por_localidade | sum(attribute='1') %}
+                    <ul class="list-group list-group-flush">
+                        {% for loc, total in por_localidade %}
+                        <li class="list-group-item py-2">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="small fw-bold">
+                                    <span class="badge bg-secondary me-1">{{ loc.sigla }}</span>
+                                    {{ loc.nome }}
+                                </span>
+                                <span class="text-muted small fw-bold">{{ total }}</span>
+                            </div>
+                            <div class="progress" style="height: 4px;">
+                                <div class="progress-bar bg-secondary"
+                                     style="width: {{ (total / total_loc * 100)|int }}%"></div>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <div class="text-center py-4 text-muted small">
+                        <i class="fa-solid fa-location-dot fa-2x mb-2 d-block opacity-25"></i>
+                        {{ t('painel_op.sem_localidade') }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    {# ══════════════ COLETORES EM CAMPO AGORA ══════════════ #}
+    <div class="card card-custom mb-4">
+        <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+            <div>
+                <h6 class="fw-bold mb-0">
+                    <i class="fa-solid fa-satellite-dish me-2 text-warning"></i>{{ t('painel_op.em_campo_titulo') }}
+                    <span class="badge bg-warning text-dark ms-2">{{ em_uso_lista|length }}</span>
+                </h6>
+                <small class="text-muted">{{ t('painel_op.em_campo_sub') }}</small>
+            </div>
+        </div>
+        {% if em_uso_lista %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr class="small text-uppercase text-muted">
+                        <th>{{ t('painel_op.col_coletor') }}</th>
+                        <th>{{ t('painel_op.col_colaborador_re') }}</th>
+                        <th>{{ t('painel_op.col_saiu_em') }}</th>
+                        <th>{{ t('painel_op.col_tempo_campo') }}</th>
+                        <th>{{ t('painel_op.col_lacre') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for mov in em_uso_lista %}
+                    {% set delta = now - mov.data_saida %}
+                    {% set horas_total = (delta.total_seconds() / 3600) | int %}
+                    {% set dias = (horas_total // 24) %}
+                    {% set horas = horas_total % 24 %}
+                    <tr>
+                        <td>
+                            <div class="fw-bold font-monospace small">
+                                {{ mov.coletor.patrimonio_display if mov.coletor else '—' }}
+                            </div>
+                            <small class="text-muted">{{ mov.coletor.serial_number if mov.coletor else '' }}</small>
+                        </td>
+                        <td class="fw-bold">{{ mov.re_colaborador }}</td>
+                        <td class="small text-muted">{{ mov.data_saida.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td>
+                            {% if dias > 1 %}
+                            <span class="badge bg-danger">
+                                <i class="fa-solid fa-clock me-1"></i>{{ dias }}d {{ horas }}h
+                            </span>
+                            {% elif dias == 1 %}
+                            <span class="badge bg-warning text-dark">
+                                <i class="fa-solid fa-clock me-1"></i>{{ dias }}d {{ horas }}h
+                            </span>
+                            {% else %}
+                            <span class="badge bg-light text-dark border">
+                                <i class="fa-solid fa-clock me-1"></i>{{ horas }}h
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small class="text-muted font-monospace">{{ mov.coletor.numero_identificacao if mov.coletor else '—' }}</small>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="fa-solid fa-circle-check fa-3x mb-3 text-success d-block"></i>
+            {{ t('painel_op.todos_na_base') }}
+        </div>
+        {% endif %}
+    </div>
+
+    {# ══════════════ TOP COLETORES — TABELA DETALHADA ══════════════ #}
+    {% if top_coletores %}
+    <div class="card card-custom">
+        <div class="card-header bg-white border-bottom py-3">
+            <h6 class="fw-bold mb-0"><i class="fa-solid fa-ranking-star me-2 text-dark"></i>{{ t('painel_op.ranking_titulo') }}</h6>
+            <small class="text-muted">{{ t('painel_op.ranking_sub') }}</small>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr class="small text-uppercase text-muted">
+                        <th style="width: 40px;">#</th>
+                        <th>{{ t('painel_op.col_equipamento') }}</th>
+                        <th>{{ t('painel_op.col_localidade') }}</th>
+                        <th>{{ t('painel_op.col_alcance') }}</th>
+                        <th>{{ t('painel_op.col_status_atual') }}</th>
+                        <th class="text-center">{{ t('painel_op.col_total_saidas') }}</th>
+                        <th class="text-end">{{ t('painel_op.col_historico') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for coletor, qtd in top_coletores %}
+                    <tr>
+                        <td class="fw-bold text-muted">{{ loop.index }}</td>
+                        <td>
+                            <div class="fw-bold font-monospace">{{ coletor.patrimonio_display }}</div>
+                            <small class="text-muted">{{ coletor.serial_number }}</small>
+                        </td>
+                        <td>
+                            {% if coletor.localidade %}
+                            <span class="badge bg-secondary">{{ coletor.localidade.sigla }}</span>
+                            {% else %}
+                            <span class="text-muted small">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if coletor.tipo_alcance %}
+                            <span class="badge bg-light text-dark border" style="font-size: 0.7em;">
+                                {{ t('coletores.alcance_curta') if coletor.tipo_alcance == 'CURTA' else t('coletores.alcance_longa') }}
+                            </span>
+                            {% else %}
+                            <span class="text-muted small">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if coletor.status == 'Disponível' %}
+                                <span class="badge bg-success">{{ t('status.disponivel') }}</span>
+                            {% elif coletor.status == 'Em Uso' %}
+                                <span class="badge bg-warning text-dark">{{ t('status.em_uso') }}</span>
+                            {% elif coletor.status in ['Manutenção', 'Suspenso'] %}
+                                <span class="badge bg-danger">{{ STATUS_LABELS.get(coletor.status, coletor.status) }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ STATUS_LABELS.get(coletor.status, coletor.status) }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <span class="fw-bold fs-5">{{ qtd }}</span>
+                        </td>
+                        <td class="text-end">
+                            <a href="{{ url_for('dashboard.historico_coletor', coletor_id=coletor.id) }}"
+                               class="btn btn-sm btn-light border text-muted">
+                                <i class="fa-solid fa-clock-rotate-left"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+{# ── Scripts Chart.js ── #}
+{% if grafico_coletores_dados or grafico_colab_dados %}
+<script src="{{ url_for('static', filename='vendor/chartjs-4.4.0/chart.umd.min.js') }}"></script>
+<script>
+    Chart.defaults.font.family = "'Segoe UI', sans-serif";
+    Chart.defaults.color       = '#6c757d';
+
+    {% if grafico_coletores_dados %}
+    new Chart(document.getElementById('chartColetores'), {
+        type: 'bar',
+        data: {
+            labels: {{ grafico_coletores_labels | tojson }},
+            datasets: [{
+                label: 'Saídas',
+                data:  {{ grafico_coletores_dados | tojson }},
+                backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { precision: 0 } },
+                x: { ticks: { font: { size: 11 } } }
+            }
+        }
+    });
+    {% endif %}
+
+    {% if grafico_colab_dados %}
+    new Chart(document.getElementById('chartColaboradores'), {
+        type: 'bar',
+        data: {
+            labels: {{ grafico_colab_labels | tojson }},
+            datasets: [{
+                label: 'Retiradas',
+                data:  {{ grafico_colab_dados | tojson }},
+                backgroundColor: 'rgba(243, 156, 18, 0.8)',
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { precision: 0 } },
+                x: { ticks: { font: { size: 11 } } }
+            }
+        }
+    });
+    {% endif %}
+</script>
+{% endif %}
+
+{% endblock %}

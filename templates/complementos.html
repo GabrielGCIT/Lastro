@@ -1,0 +1,618 @@
+{% extends "base.html" %}
+{% block title %}{{ t('complementos.titulo') }}{% endblock %}
+
+{# Pacote B, fatia B3 — a tela deixou de ser um cadastro em três passos e virou
+   um INVENTÁRIO.
+
+   Por quê: os três passos (tipo → estoque contado → peça) tinham peso igual na
+   tela, mas dois deles existiam por causa da BATERIA. Com a bateria em tela
+   própria (B1/B2), o que sobra é a lista de peças identificadas — e ela merece
+   o desenho que o inventário de coletores já tem, porque é a MESMA pessoa
+   operando as duas telas no mesmo dia.
+
+   O que veio de lá (U1):
+     · filtro na URL, para dar para favoritar a visão;
+     · seleção múltipla com barra que só aparece quando há algo marcado.
+
+   O que NÃO veio: o controle de colunas. O Gabriel o recusou na validação de
+   08/09, olhando a tela com dado real — quem administra o parque quer as nove
+   colunas de uma vez, e um clique por visita não paga a economia de espaço.
+   A tabela rola dentro do próprio container nas larguras estreitas.
+
+   E duas regras que a B2 comprou com defeito:
+     · o vocabulário é o MESMO do rastreio (EM ESTOQUE / EM CAMPO / FORA DO
+       PRAZO / NÃO VOLTOU). A mesma coisa não pode ter dois nomes em duas telas.
+     · nada de traço mudo: peça sem CD ganha selo, porque "sem CD" é um problema
+       para resolver, não um campo em branco. #}
+
+{% block content %}
+<div class="container-fluid fade-in">
+
+    {# ── Cabeçalho ── #}
+    <div class="page-header">
+        <div>
+            <h2 class="h3 text-dark fw-bold">
+                <i class="fa-solid fa-plug-circle-plus me-2"></i>{{ t('complementos.titulo') }}
+            </h2>
+            <p class="text-muted small mb-0">
+                {{ t('complementos.subtitulo') }}
+                {# A bateria saiu daqui na B1. Quem procurar bateria nesta tela
+                   precisa achar a porta, não concluir que o dado sumiu. #}
+                <a href="{{ url_for('complementos.baterias') }}" class="text-decoration-none ms-1">
+                    <i class="fa-solid fa-car-battery me-1"></i>{{ t('complementos.ir_baterias') }}
+                </a>
+            </p>
+        </div>
+        <button class="btn btn-mb-action shadow-sm fw-bold" onclick="abrirModalPeca()"
+                {{ 'disabled' if not categorias_ativas }}>
+            <i class="fa-solid fa-plus me-2"></i>{{ t('complementos.btn_nova_peca') }}
+        </button>
+    </div>
+
+    {# ── A dívida antes da lista (mesmo padrão da H4 no inventário) ── #}
+    {% if fora_de_prazo %}
+    <div class="alert alert-danger d-flex align-items-center gap-3 mb-3 shadow-sm">
+        <i class="fa-solid fa-triangle-exclamation fa-2x"></i>
+        <div class="flex-fill">
+            <strong>{{ fora_de_prazo }}</strong> {{ t('complementos.banner_atraso') }}
+        </div>
+        {% if filtro_situacao == 'ATRASADO' %}
+        <a href="{{ url_for('complementos.index', localidade=filtro_loc, tipo=filtro_tipo) }}"
+           class="btn btn-outline-danger btn-sm fw-bold">{{ t('complementos.limpar_filtro') }}</a>
+        {% else %}
+        <a href="{{ url_for('complementos.index', localidade=filtro_loc, tipo=filtro_tipo,
+                            situacao='ATRASADO') }}"
+           class="btn btn-danger btn-sm fw-bold">
+            <i class="fa-solid fa-filter me-1"></i>{{ t('complementos.ver_fora_prazo') }}
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {# O catálogo é POR EMPRESA — informação só para quem alterna entre tenants. #}
+    {% if empresa_do_catalogo and session.get('is_owner') %}
+    <div class="alert alert-info d-flex align-items-center py-2 mb-3">
+        <i class="fa-solid fa-building me-2"></i>
+        <div class="small">
+            {{ t('complementos.escopo_empresa') }}
+            <strong>{{ empresa_do_catalogo.nome }}</strong>.
+            {{ t('complementos.escopo_aviso') }}
+        </div>
+    </div>
+    {% endif %}
+
+    {# ── Barra de filtros ── #}
+    <form method="GET" action="{{ url_for('complementos.index') }}" class="card card-custom p-3 mb-3">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted text-uppercase" for="filtroLoc">
+                    {{ t('label.localidade') }}
+                </label>
+                <select name="localidade" id="filtroLoc" class="form-select form-select-sm">
+                    <option value="">{{ t('label.todos') }}</option>
+                    {% for loc in localidades %}
+                    <option value="{{ loc.sigla }}" {{ 'selected' if filtro_loc == loc.sigla }}>
+                        {{ loc.sigla }} — {{ loc.nome }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted text-uppercase" for="filtroTipo">
+                    {{ t('complementos.label_tipo') }}
+                </label>
+                <select name="tipo" id="filtroTipo" class="form-select form-select-sm">
+                    <option value="">{{ t('label.todos') }}</option>
+                    {% for c in categorias %}
+                    <option value="{{ c.id }}" {{ 'selected' if filtro_tipo == c.id }}>{{ c.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted text-uppercase" for="filtroSit">
+                    {{ t('complementos.col_situacao') }}
+                </label>
+                <select name="situacao" id="filtroSit" class="form-select form-select-sm">
+                    <option value="">{{ t('label.todos') }}</option>
+                    <option value="ESTOQUE" {{ 'selected' if filtro_situacao == 'ESTOQUE' }}>
+                        {{ t('rastreio.em_estoque') }}</option>
+                    <option value="NO_PRAZO" {{ 'selected' if filtro_situacao == 'NO_PRAZO' }}>
+                        {{ t('rastreio.em_campo') }}</option>
+                    <option value="ATRASADO" {{ 'selected' if filtro_situacao == 'ATRASADO' }}>
+                        {{ t('rastreio.atrasado') }}</option>
+                    <option value="FALTOU" {{ 'selected' if filtro_situacao == 'FALTOU' }}>
+                        {{ t('rastreio.nao_voltou') }}</option>
+                    <option value="INATIVA" {{ 'selected' if filtro_situacao == 'INATIVA' }}>
+                        {{ t('complementos.sit_inativa') }}</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-dark btn-sm flex-fill">
+                    <i class="fa-solid fa-filter me-1"></i>{{ t('btn.filtrar') }}
+                </button>
+                {% if filtro_loc or filtro_tipo or filtro_situacao %}
+                <a href="{{ url_for('complementos.index') }}"
+                   class="btn btn-outline-secondary btn-sm" title="{{ t('complementos.limpar_filtro') }}">
+                    <i class="fa-solid fa-xmark"></i>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% if filtro_loc or filtro_tipo or filtro_situacao %}
+        <div class="mt-2">
+            <small class="text-muted">{{ t('complementos.mostrando', n=linhas|length) }}</small>
+        </div>
+        {% endif %}
+    </form>
+
+    {# ── Inventário ── #}
+    <div class="card card-custom border-0 shadow-sm p-3">
+
+        {# U1 — o formulário fica FORA da tabela e as caixas apontam para ele por
+           `form="formMover"`. Um <form> dentro de <table> é inválido e o
+           navegador o expulsa do lugar, quebrando a submissão de um jeito
+           difícil de enxergar. #}
+        <form method="POST" id="formMover"
+              action="{{ url_for('complementos.itens_mover') }}"
+              class="alert alert-primary d-none align-items-center gap-3 mb-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="voltar" value="{{ request.full_path }}">
+            <span class="fw-bold"><span id="contaSelecao">0</span> {{ t('complementos.selecionadas') }}</span>
+            <div class="d-flex align-items-center gap-2 flex-fill">
+                <label class="small fw-bold mb-0" for="locDestino">{{ t('complementos.mover_para') }}</label>
+                <select name="localidade_destino" id="locDestino"
+                        class="form-select form-select-sm" style="max-width: 260px;" required>
+                    <option value="">{{ t('complementos.selecione') }}</option>
+                    {% for loc in localidades %}
+                    <option value="{{ loc.id }}">{{ loc.sigla }} — {{ loc.nome }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-primary btn-sm fw-bold">
+                    <i class="fa-solid fa-truck-fast me-1"></i>{{ t('complementos.btn_mover') }}
+                </button>
+            </div>
+            <button type="button" class="btn btn-link btn-sm text-decoration-none"
+                    id="limparSelecao">{{ t('complementos.limpar_selecao') }}</button>
+        </form>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light">
+                    <tr class="text-uppercase small text-muted">
+                        <th style="width: 36px;" class="text-center">
+                            <input type="checkbox" class="form-check-input" id="marcarTodos"
+                                   title="{{ t('complementos.marcar_todos') }}">
+                        </th>
+                        <th style="width: 13%">{{ t('complementos.col_situacao') }}</th>
+                        <th style="width: 14%">{{ t('complementos.label_identificador') }}</th>
+                        <th style="width: 13%">{{ t('complementos.label_tipo') }}</th>
+                        <th style="width: 8%">{{ t('label.localidade') }}</th>
+                        <th style="width: 11%">{{ t('complementos.col_acompanha') }}</th>
+                        <th style="width: 13%">{{ t('rastreio.col_quem') }}</th>
+                        <th style="width: 9%">{{ t('rastreio.col_desde') }}</th>
+                        <th style="width: 11%">{{ t('complementos.col_onde_serve') }}</th>
+                        <th class="text-end" style="width: 8%">{{ t('label.acao') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in linhas %}
+                    {% set i = r.item %}
+                    {% set devendo = i.ativo and r.estado in ('ATRASADO', 'FALTOU') %}
+                    <tr class="{{ 'table-danger' if devendo else '' }}{{ ' opacity-50' if not i.ativo else '' }}">
+                        <td class="text-center">
+                            <input type="checkbox" class="form-check-input js-marcar"
+                                   name="item_ids" value="{{ i.id }}" form="formMover">
+                        </td>
+                        <td>
+                            {% if not i.ativo %}
+                            <span class="badge rounded-pill bg-secondary px-2 py-1">
+                                {{ t('complementos.sit_inativa') }}
+                            </span>
+                            {% elif r.estado == 'ESTOQUE' %}
+                            <span class="badge rounded-pill bg-success px-2 py-1">
+                                <i class="fa-solid fa-warehouse me-1"></i>{{ t('rastreio.em_estoque') }}
+                            </span>
+                            {% elif r.estado == 'FALTOU' %}
+                            <span class="badge rounded-pill bg-danger px-2 py-1">
+                                <i class="fa-solid fa-triangle-exclamation me-1"></i>{{ t('rastreio.nao_voltou') }}
+                            </span>
+                            {% elif r.estado == 'ATRASADO' %}
+                            <span class="badge rounded-pill bg-danger px-2 py-1">
+                                <i class="fa-solid fa-clock me-1"></i>{{ t('rastreio.atrasado') }}
+                            </span>
+                            {% else %}
+                            <span class="badge rounded-pill bg-warning text-dark px-2 py-1">
+                                <i class="fa-solid fa-person-walking me-1"></i>{{ t('rastreio.em_campo') }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="fw-bold font-monospace">{{ i.identificador }}</td>
+                        <td class="small text-muted">{{ r.categoria }}</td>
+                        <td>
+                            {% if i.localidade %}
+                            <span class="badge bg-light text-dark border">{{ i.localidade.sigla }}</span>
+                            {% else %}
+                            {# Sem CD é problema, não campo vazio: a peça aparece em
+                               TODOS os escopos enquanto não tiver lugar. A barra de
+                               seleção acima resolve em lote. #}
+                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning">
+                                <i class="fa-solid fa-location-dot me-1"></i>{{ t('complementos.sem_cd') }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="small">
+                            {# B3 — leitura, não decisão. O vínculo passa a ser feito no
+                               detalhe do coletor (B4): é sobre AQUELE coletor, não sobre
+                               o catálogo. #}
+                            {% if i.coletor %}
+                            <span class="font-monospace">{{ i.coletor.rotulo }}</span>
+                            {% else %}
+                            <span class="text-muted">{{ t('complementos.sem_pareamento') }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="small">
+                            {% if r.colaborador or r.re %}
+                            {{ r.colaborador.nome if r.colaborador else r.re }}
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="small text-muted">
+                            {{ r.desde.strftime('%d/%m %H:%M') if r.desde else '—' }}
+                        </td>
+                        <td class="small">
+                            {# Rótulo CURTO na coluna, explicação inteira no title: o
+                               texto longo pedia 223px sozinho e era ele que fazia a
+                               tabela rolar mesmo em tela larga. A palavra continua
+                               legível — não virou ícone mudo. #}
+                            {% if i.categoria and i.categoria.camara_atendida == 'CLIMATIZADO' %}
+                            <span class="badge bg-info-subtle text-info-emphasis border"
+                                  title="{{ t('complementos.camara_climatizado_badge') }}">
+                                {{ t('complementos.camara_climatizado_curto') }}</span>
+                            {% elif i.categoria and i.categoria.camara_atendida == 'SECO' %}
+                            <span class="badge bg-warning-subtle text-warning-emphasis border"
+                                  title="{{ t('complementos.camara_seco_badge') }}">
+                                {{ t('complementos.camara_seco_curto') }}</span>
+                            {% else %}
+                            <span class="text-muted" title="{{ t('complementos.camara_sem') }}">
+                                {{ t('complementos.camara_sem_curto') }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <form method="POST" class="d-inline"
+                                  action="{{ url_for('complementos.item_toggle', item_id=i.id) }}"
+                                  onsubmit="return {{ 'confirm(this.dataset.aviso)' if i.ativo else 'true' }};"
+                                  data-aviso="{{ t('complementos.confirma_desativar_peca') }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button class="btn btn-sm btn-outline-secondary" type="submit">
+                                    {{ t('complementos.btn_desativar') if i.ativo
+                                       else t('complementos.btn_reativar') }}
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="10" class="text-center py-4">
+                        <div class="text-muted">
+                            {{ t('complementos.sem_pecas_filtro') if (filtro_loc or filtro_tipo or filtro_situacao)
+                               else t('complementos.sem_pecas') }}
+                        </div>
+                        {% if not categorias_ativas %}
+                        <div class="small text-primary mt-1">{{ t('complementos.sem_tipos_dica') }}</div>
+                        {% endif %}
+                    </td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {# ── Tipos de peça — cadastro raro, por isso recolhido ── #}
+    <details class="mt-4" {{ 'open' if not categorias else '' }}>
+        <summary class="fw-bold text-primary" style="cursor: pointer;">
+            <i class="fa-solid fa-tags me-1"></i>{{ t('complementos.tipos_titulo') }}
+            <span class="badge bg-secondary ms-1">{{ categorias|length }}</span>
+        </summary>
+        <div class="card card-custom border-0 shadow-sm mt-2">
+            <div class="card-body">
+                <p class="text-muted small">{{ t('complementos.tipos_sub') }}</p>
+
+                <form method="POST" action="{{ url_for('complementos.categoria_criar') }}"
+                      class="row g-3 align-items-end mb-4">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="col-lg-4">
+                        <label class="form-label fw-bold" for="catNome">{{ t('complementos.label_nome') }}</label>
+                        <input type="text" id="catNome" name="nome" class="form-control"
+                               maxlength="40" placeholder="{{ t('complementos.placeholder_nome') }}"
+                               oninput="this.value = this.value.toUpperCase()" required>
+                    </div>
+                    {# A pergunta "você conta quantas tem, ou cada peça tem patrimônio?"
+                       saiu na B3: aqui só entra peça com patrimônio, e a bateria — o
+                       único caso contado — se cadastra na tela dela. Duas opções em que
+                       uma leva a um beco é o defeito que a B2 já tinha corrigido. #}
+                    <div class="col-lg-5">
+                        <label class="form-label fw-bold" for="catCamara">
+                            {{ t('complementos.pergunta_camara') }}
+                        </label>
+                        <select name="camara_atendida" id="catCamara" class="form-select">
+                            <option value="">{{ t('complementos.camara_sem') }}</option>
+                            <option value="SECO">{{ t('complementos.camara_seco') }}</option>
+                            <option value="CLIMATIZADO">{{ t('complementos.camara_climatizado') }}</option>
+                        </select>
+                    </div>
+                    <div class="col-lg-3">
+                        <button class="btn btn-success w-100 fw-bold py-2" type="submit">
+                            <i class="fa-solid fa-plus me-1"></i>{{ t('complementos.btn_adicionar') }}
+                        </button>
+                    </div>
+                    <div class="col-12">
+                        <div class="form-text mb-0">
+                            <i class="fa-solid fa-lightbulb me-1"></i>{{ t('complementos.ajuda_nome') }}
+                            &nbsp;·&nbsp; {{ t('complementos.ajuda_camara') }}
+                        </div>
+                    </div>
+                </form>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>{{ t('complementos.label_nome') }}</th>
+                                <th style="width: 260px;">{{ t('complementos.col_onde_serve') }}</th>
+                                <th class="text-center" style="width: 110px;">{{ t('complementos.col_pecas') }}</th>
+                                <th class="text-center" style="width: 110px;">{{ t('label.status') }}</th>
+                                <th class="text-end" style="width: 130px;">{{ t('label.acao') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in categorias %}
+                            <tr class="{{ '' if c.ativa else 'opacity-50' }}">
+                                <td class="fw-bold">{{ c.nome }}</td>
+                                <td>
+                                    {% if c.camara_atendida == 'CLIMATIZADO' %}
+                                    <span class="badge bg-info-subtle text-info-emphasis border">
+                                        {{ t('complementos.camara_climatizado_badge') }}</span>
+                                    {% elif c.camara_atendida == 'SECO' %}
+                                    <span class="badge bg-warning-subtle text-warning-emphasis border">
+                                        {{ t('complementos.camara_seco_badge') }}</span>
+                                    {% else %}
+                                    <span class="text-muted small">{{ t('complementos.camara_sem') }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">{{ c.itens|length }}</td>
+                                <td class="text-center">
+                                    {% if c.ativa %}
+                                    <span class="badge bg-success">{{ t('complementos.ativo') }}</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{{ t('complementos.inativo') }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <form method="POST" class="d-inline"
+                                          action="{{ url_for('complementos.categoria_toggle', cat_id=c.id) }}"
+                                          onsubmit="return {{ 'confirm(this.dataset.aviso)' if c.ativa else 'true' }};"
+                                          data-aviso="{{ t('complementos.confirma_desativar') }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button class="btn btn-sm btn-outline-secondary" type="submit">
+                                            {{ t('complementos.btn_desativar') if c.ativa
+                                               else t('complementos.btn_reativar') }}
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="5" class="text-center py-4">
+                                <div class="text-muted">{{ t('complementos.sem_categorias') }}</div>
+                                <div class="small text-primary mt-1">{{ t('complementos.sem_categorias_dica') }}</div>
+                            </td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </details>
+
+    {# ── Herança: tipo CONTADO que não é bateria ──────────────────────────────
+       O bloco só existe se o dado existir. Ninguém cria um tipo contado por aqui
+       desde a B3, mas quem já tiver um não pode perder a tela onde se informa a
+       quantidade — e um passo permanentemente vazio seria pior que nenhum. #}
+    {% if categorias_quantidade %}
+    <div class="card card-custom border-0 shadow-sm mt-4">
+        <div class="card-body">
+            <h5 class="fw-bold mb-1">{{ t('complementos.estoque_titulo') }}</h5>
+            <p class="text-muted small">{{ t('complementos.estoque_legado') }}</p>
+
+            {% if localidades %}
+            <form method="POST" action="{{ url_for('complementos.estoque_salvar') }}"
+                  class="row g-3 align-items-end mb-4" id="formEstoque">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold" for="estCat">{{ t('complementos.label_tipo') }}</label>
+                    <select name="categoria_id" id="estCat" class="form-select" required>
+                        <option value="">{{ t('complementos.selecione') }}</option>
+                        {% for c in categorias_quantidade %}
+                        <option value="{{ c.id }}">{{ c.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold" for="estLoc">{{ t('complementos.label_localidade') }}</label>
+                    <select name="localidade_id" id="estLoc" class="form-select" required>
+                        <option value="">{{ t('complementos.selecione') }}</option>
+                        {% for l in localidades %}
+                        <option value="{{ l.id }}">{{ l.sigla }} — {{ l.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold" for="estQtd">{{ t('complementos.label_quantidade') }}</label>
+                    <input type="number" name="qtd_cadastrada" id="estQtd" class="form-control"
+                           min="0" step="1" value="0" required>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100 fw-bold py-2" type="submit">
+                        {{ t('complementos.btn_salvar') }}
+                    </button>
+                </div>
+            </form>
+
+            <div class="table-responsive">
+                <table class="table table-bordered align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>{{ t('complementos.label_tipo') }}</th>
+                            {% for l in localidades %}
+                            <th class="text-center" title="{{ l.nome }}">{{ l.sigla }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in categorias_quantidade %}
+                        <tr>
+                            <td class="fw-bold">{{ c.nome }}</td>
+                            {% for l in localidades %}
+                            {% set qtd = estoques.get((c.id, l.id)) %}
+                            <td class="text-center p-0">
+                                <button type="button"
+                                        class="btn btn-sm w-100 h-100 border-0 rounded-0 py-2 js-preencher"
+                                        data-cat="{{ c.id }}" data-loc="{{ l.id }}"
+                                        data-qtd="{{ qtd if qtd is not none else 0 }}"
+                                        title="{{ t('complementos.clique_para_editar') }}">
+                                    {% if qtd is none %}
+                                    <span class="badge bg-light text-secondary border fw-normal">
+                                        {{ t('complementos.nao_informado') }}
+                                    </span>
+                                    {% else %}
+                                    <span class="fw-bold">{{ qtd }}</span>
+                                    {% endif %}
+                                </button>
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-warning d-flex align-items-center mb-0">
+                <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                <div class="small">{{ t('complementos.estoque_sem_cd') }}</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+{# ── Modal: nova peça ── #}
+<div class="modal fade" id="modalPeca" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content border-0">
+            <div class="modal-header" style="background-color: #0f172a; color: white;">
+                <h5 class="modal-title fw-bold">
+                    <i class="fa-solid fa-barcode me-2"></i>{{ t('complementos.modal_titulo') }}
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('complementos.item_criar') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body bg-light">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small" for="itemCat">{{ t('complementos.label_tipo') }}</label>
+                        <select name="categoria_id" id="itemCat" class="form-select" required>
+                            <option value="">{{ t('complementos.selecione') }}</option>
+                            {% for c in categorias_ativas %}
+                            <option value="{{ c.id }}">{{ c.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small" for="itemId">
+                            {{ t('complementos.label_identificador') }}
+                        </label>
+                        <input type="text" name="identificador" id="itemId"
+                               class="form-control font-monospace" maxlength="60"
+                               placeholder="{{ t('complementos.placeholder_identificador') }}"
+                               oninput="this.value = this.value.toUpperCase()" required>
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label fw-bold small" for="itemLoc">{{ t('label.localidade') }}</label>
+                        <select name="localidade_id" id="itemLoc" class="form-select">
+                            <option value="">{{ t('complementos.sem_cd') }}</option>
+                            {% for l in localidades %}
+                            <option value="{{ l.id }}">{{ l.sigla }} — {{ l.nome }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">{{ t('complementos.ajuda_cd_peca') }}</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                        {{ t('btn.cancelar') }}
+                    </button>
+                    <button type="submit" class="btn btn-success fw-bold">
+                        <i class="fa-solid fa-plus me-1"></i>{{ t('complementos.btn_adicionar') }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function abrirModalPeca() {
+    new bootstrap.Modal(document.getElementById('modalPeca')).show();
+}
+
+// U1 — a barra de ações só existe quando há seleção, e o contador é a única
+// confirmação de que a marcação pegou. Sem ele, "mover 12" vira ato de fé.
+(function () {
+    var barra  = document.getElementById('formMover');
+    var conta  = document.getElementById('contaSelecao');
+    var todos  = document.getElementById('marcarTodos');
+    var limpar = document.getElementById('limparSelecao');
+    var caixas = function () { return document.querySelectorAll('.js-marcar'); };
+
+    function atualizar() {
+        var n = document.querySelectorAll('.js-marcar:checked').length;
+        conta.textContent = n;
+        barra.classList.toggle('d-none', n === 0);
+        barra.classList.toggle('d-flex', n > 0);
+        if (todos) {
+            todos.checked = n > 0 && n === caixas().length;
+            todos.indeterminate = n > 0 && n < caixas().length;
+        }
+    }
+
+    caixas().forEach(function (c) { c.addEventListener('change', atualizar); });
+    if (todos) {
+        todos.addEventListener('change', function () {
+            caixas().forEach(function (c) { c.checked = todos.checked; });
+            atualizar();
+        });
+    }
+    if (limpar) {
+        limpar.addEventListener('click', function () {
+            caixas().forEach(function (c) { c.checked = false; });
+            atualizar();
+        });
+    }
+    atualizar();
+})();
+
+// Bloco herdado: clicar numa célula preenche o formulário acima em vez de
+// obrigar a escolher tipo e CD de novo. Sem JS, a tabela continua uma tabela.
+document.querySelectorAll('.js-preencher').forEach(function (celula) {
+    celula.addEventListener('click', function () {
+        document.getElementById('estCat').value = this.dataset.cat;
+        document.getElementById('estLoc').value = this.dataset.loc;
+        var qtd = document.getElementById('estQtd');
+        qtd.value = this.dataset.qtd;
+        document.getElementById('formEstoque').scrollIntoView({ behavior: 'smooth',
+                                                                block: 'center' });
+        qtd.focus();
+        qtd.select();
+    });
+});
+</script>
+{% endblock %}

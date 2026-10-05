@@ -1,0 +1,1187 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{% block title %}Dashboard{% endblock %} | MBAssets</title>
+
+    <!--
+        Anti-flash: define o tema ANTES de qualquer CSS carregar.
+        Sem isso, o usuário vê um flash branco antes do tema escuro ser aplicado.
+
+        Fonte da verdade: a preferência do usuário renderizada pelo servidor
+        (tema_pref, vinda de Usuario.tema). O localStorage é só cache para a tela
+        de login / primeiro acesso, onde ainda não há sessão. 'auto' resolve via
+        prefers-color-scheme do sistema operacional.
+    -->
+    <script>
+        (function () {
+            var pref = {{ tema_pref|tojson }} || localStorage.getItem('mb-theme') || 'light';
+            localStorage.setItem('mb-theme', pref);
+            var resolved = pref;
+            if (pref === 'auto') {
+                resolved = window.matchMedia
+                    && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            document.documentElement.setAttribute('data-bs-theme', resolved);
+        })();
+    </script>
+
+    <!-- Polling indicator — definido no <head> para templates do bloco content poderem chamar startPolling() -->
+    <script>
+    window.startPolling = (function () {
+        var C = 2 * Math.PI * 7; // circumference r=7 ≈ 43.98
+
+        function _bind(left, secs) {
+            var wrap = document.getElementById('polling-indicator');
+            var ring = document.getElementById('polling-ring');
+            var cd   = document.getElementById('polling-countdown');
+            if (wrap) wrap.style.display = '';
+            if (cd)   cd.textContent = left;
+            if (ring) ring.style.strokeDashoffset = 0;
+        }
+
+        return function (fn, secs) {
+            var left = secs;
+
+            // O elemento pode ainda não existir se o script rodar durante o parse.
+            // DOMContentLoaded garante que o indicador já está no DOM quando bindamos.
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function () { _bind(left, secs); });
+            } else {
+                _bind(left, secs);
+            }
+
+            return setInterval(function () {
+                left--;
+                if (left <= 0) {
+                    try { fn(); } catch (e) {}
+                    left = secs;
+                }
+                var cd   = document.getElementById('polling-countdown');
+                var ring = document.getElementById('polling-ring');
+                if (cd)   cd.textContent = left;
+                if (ring) ring.style.strokeDashoffset = C * ((secs - left) / secs);
+            }, 1000);
+        };
+    })();
+    </script>
+
+    <link href="{{ url_for('static', filename='vendor/bootstrap-5.3.0/css/bootstrap.min.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome-6.4.0/css/all.min.css') }}">
+
+    <style>
+        /* ─────────────────────────────────────────────────────────
+           VARIÁVEIS DE SISTEMA — P10 Teams-style
+           ───────────────────────────────────────────────────────── */
+        :root {
+            /* Marca */
+            --mb-blue:        #0d1628;
+            --mb-dark-1:      #1e1f22;
+            --mb-dark-2:      #2b2d31;
+            --mb-dark-3:      #313338;
+            --mb-dark-4:      #383a40;
+            --mb-green:       #7AC143;
+            --mb-green-dark:  #5a9e2f;
+            --mb-green-light: #9bd96a;
+
+            /* Acento semântico — cor de ênfase do app (botões de ação, foco,
+               links, estado ativo). Padrão = verde da marca; sobrescrito por
+               usuário via <style> injetado no head (Usuario.cor_acento).
+               As variantes derivam via color-mix (CSS nativo, sem JS), então
+               acompanham automaticamente qualquer acento escolhido. */
+            --accent:          #7AC143;
+            --accent-dark:     color-mix(in srgb, var(--accent) 78%, #000);
+            --accent-light:    color-mix(in srgb, var(--accent) 72%, #fff);
+            /* Acento como TEXTO/ÍCONE sobre superfície que segue o tema:
+               variante escura no claro (contraste sobre branco), clara no escuro.
+               Use este token — não --accent cru — para ícone/link acentuado no
+               conteúdo, senão um acento escuro some no modo escuro. */
+            --accent-fg:       var(--accent-dark);
+            /* Texto/ícone SOBRE o acento. Escuro para o verde da marca (branco
+               falha AA nele); a injeção por-usuário troca para #fff, pois a
+               paleta curada garante contraste AA de texto branco. */
+            --accent-contrast: #1e1f22;
+
+            /* Roxo de empréstimo/loaner — antes repetido como #6f42c1 nos templates */
+            --loaner:          #6f42c1;
+
+            /* Layout */
+            --sidebar-w:   240px;
+            --navbar-h:     48px;
+            --radius-sm:     4px;
+            --radius-md:     6px;
+            --radius-lg:     8px;
+
+            /* Superfícies (light mode) */
+            --surface-0:      #ffffff;
+            --surface-1:      #f5f5f5;
+            --surface-2:      #e8e8e8;
+            --border-color:   rgba(0, 0, 0, 0.09);
+            --text-primary:   #11100f;
+            --text-secondary: #44464a;
+            --text-muted:     #5c5c5c;
+            --shadow-card:    0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        /* ─────────────────────────────────────────────────────────
+           DARK MODE OVERRIDES
+           ───────────────────────────────────────────────────────── */
+        [data-bs-theme="dark"] {
+            --bs-body-bg:         var(--mb-dark-3);
+            --bs-body-color:      #e3e5e8;
+            --bs-secondary-bg:    var(--mb-dark-2);
+            --bs-tertiary-bg:     var(--mb-dark-1);
+            --bs-card-bg:         var(--mb-dark-2);
+            --bs-card-cap-bg:     var(--mb-dark-2);
+            --bs-modal-bg:        var(--mb-dark-2);
+            --bs-border-color:    rgba(255,255,255,0.08);
+            --bs-secondary-color: #b5bac1;
+            --bs-emphasis-color:  #ffffff;
+            --bs-table-bg:           transparent;
+            --bs-table-hover-bg:     rgba(255,255,255,0.04);
+            --bs-table-striped-bg:   rgba(255,255,255,0.02);
+            --bs-table-color:        #e3e5e8;
+            --bs-table-border-color: rgba(255,255,255,0.08);
+            --bs-link-color:         var(--accent-light);
+            --bs-link-hover-color:   var(--accent-light);
+
+            --accent-fg:      var(--accent-light);
+            --surface-0:      var(--mb-dark-2);
+            --surface-1:      var(--mb-dark-3);
+            --surface-2:      var(--mb-dark-4);
+            --border-color:   rgba(255,255,255,0.08);
+            --text-primary:   #e3e5e8;
+            --text-secondary: #d4d7dc;
+            /* Clareado de #b5bac1 → #c3c7ce: passa AA com folga em todas as
+               superfícies escuras e reduz a sensação de "apagado" reportada. */
+            --text-muted:     #c3c7ce;
+            --shadow-card:    0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+        }
+
+        [data-bs-theme="dark"] .bg-light,
+        [data-bs-theme="dark"] .bg-white       { background-color: var(--mb-dark-4) !important; }
+        [data-bs-theme="dark"] .text-dark       { color: #e3e5e8 !important; }
+        /* Contraste dark: bg-warning/bg-info são cores fixas (amarelo/ciano) nos
+           dois temas — .text-dark viraria texto claro sobre fundo claro (falha AA).
+           A especificidade de 2 classes vence a regra genérica acima e restaura
+           o texto escuro sobre esses fundos. */
+        [data-bs-theme="dark"] .bg-warning.text-dark,
+        [data-bs-theme="dark"] .bg-info.text-dark,
+        [data-bs-theme="dark"] .badge.bg-warning,
+        [data-bs-theme="dark"] .badge.bg-info    { color: #1e1f22 !important; }
+        [data-bs-theme="dark"] .table-light     { --bs-table-bg: var(--mb-dark-4); --bs-table-color: #e3e5e8; }
+        [data-bs-theme="dark"] .border-bottom,
+        [data-bs-theme="dark"] .border-top      { border-color: rgba(255,255,255,0.08) !important; }
+        [data-bs-theme="dark"] .list-group-item {
+            background-color: var(--mb-dark-2);
+            border-color: rgba(255,255,255,0.08);
+            color: #e3e5e8;
+        }
+        [data-bs-theme="dark"] .card-header     { border-bottom-color: rgba(255,255,255,0.08); }
+        [data-bs-theme="dark"] .dropdown-menu   { background-color: var(--mb-dark-2); border-color: rgba(255,255,255,0.1); }
+        [data-bs-theme="dark"] .dropdown-item   { color: #e3e5e8; }
+        [data-bs-theme="dark"] .dropdown-item:hover { background-color: var(--mb-dark-4); color: #fff; }
+        [data-bs-theme="dark"] .dropdown-item-text  { color: #b5bac1; }
+        [data-bs-theme="dark"] .dropdown-divider    { border-color: rgba(255,255,255,0.08); }
+        [data-bs-theme="dark"] .nav-tabs .nav-link  { color: #b5bac1; }
+        [data-bs-theme="dark"] .nav-tabs .nav-link.active {
+            background-color: var(--mb-dark-2);
+            border-bottom-color: var(--mb-dark-2);
+            color: #fff;
+        }
+        [data-bs-theme="dark"] .nav-tabs        { border-bottom-color: rgba(255,255,255,0.08); }
+        [data-bs-theme="dark"] .progress        { background-color: var(--mb-dark-4); }
+        [data-bs-theme="dark"] .badge.bg-light  { background-color: var(--mb-dark-4) !important; color: #e3e5e8 !important; }
+        [data-bs-theme="dark"] .font-monospace  { color: var(--accent-light); }
+
+        /* ─────────────────────────────────────────────────────────
+           BODY + TIPOGRAFIA
+           ───────────────────────────────────────────────────────── */
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            font-size: 14px;
+            overflow-x: hidden;
+            transition: background-color 0.2s, color 0.2s;
+        }
+
+        /* Cabeçalho de página padronizado */
+        .page-header {
+            padding-bottom: 14px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .page-header h1, .page-header .h1,
+        .page-header h2, .page-header .h2 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            margin-bottom: 2px;
+        }
+        .page-header small, .page-header .page-subtitle {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+        }
+
+        /* ─────────────────────────────────────────────────────────
+           NAVBAR
+           ───────────────────────────────────────────────────────── */
+        .navbar-mb {
+            background-color: var(--mb-blue);
+            min-height: var(--navbar-h);
+            padding-top: 0;
+            padding-bottom: 0;
+            box-shadow: 0 1px 0 rgba(255,255,255,0.06);
+            z-index: 1040;
+        }
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: #ffffff !important;
+            letter-spacing: 0.3px;
+        }
+        .navbar-brand:hover { color: rgba(255,255,255,0.85) !important; }
+        /* Ícone/logo e chrome da navbar ficam sobre o navy sempre-escuro:
+           usam --accent-light para legibilidade mesmo com acentos escuros. */
+        .navbar-brand .brand-icon { color: var(--accent-light); }
+        /* T5 — logo white-label na navbar: altura travada (a largura acompanha
+           a proporção do arquivo, então logo horizontal ou quadrado cabem sem
+           distorcer) e teto de largura para não empurrar o chrome da direita. */
+        .navbar-brand .brand-logo {
+            height: 26px;
+            max-width: 180px;
+            object-fit: contain;
+            display: block;
+        }
+
+        .btn-theme-toggle {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.12);
+            color: rgba(255,255,255,0.65);
+            border-radius: var(--radius-sm);
+            padding: 4px 8px;
+            font-size: 0.82rem;
+            line-height: 1;
+            transition: all 0.15s;
+        }
+        .btn-theme-toggle:hover {
+            background-color: rgba(255,255,255,0.08);
+            color: var(--accent-light);
+            border-color: color-mix(in srgb, var(--accent-light) 50%, transparent);
+        }
+
+        /* Avatares */
+        .user-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background-color: var(--accent);
+            color: var(--accent-contrast);
+            font-size: 0.6rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            letter-spacing: 0.04em;
+            flex-shrink: 0;
+            cursor: pointer;
+            border: 1.5px solid rgba(255,255,255,0.15);
+            transition: border-color 0.15s;
+        }
+        .user-avatar:hover { border-color: var(--accent); }
+
+        .user-avatar-sm {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: var(--accent);
+            color: var(--accent-contrast);
+            font-size: 0.58rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        /* ─────────────────────────────────────────────────────────
+           SIDEBAR — Teams-style (width fixa, indicator bar no active)
+           ───────────────────────────────────────────────────────── */
+        .sidebar {
+            background-color: var(--mb-dark-1);
+            min-height: 100vh;
+            padding-top: 16px;
+            border-right: 1px solid rgba(255,255,255,0.04);
+            display: flex;
+            flex-direction: column;
+            transition: width 0.25s;
+        }
+
+        /* Override Bootstrap col-lg-2 → largura fixa */
+        @media (min-width: 992px) {
+            .sidebar {
+                flex: 0 0 var(--sidebar-w);
+                max-width: var(--sidebar-w);
+                width: var(--sidebar-w);
+            }
+            main.ms-sm-auto {
+                flex: 1 1 auto;
+                max-width: calc(100% - var(--sidebar-w));
+                min-width: 0;
+            }
+        }
+
+        .sidebar-nav { flex: 1; overflow-y: auto; }
+
+        .sidebar-label {
+            color: rgba(255,255,255,0.28);
+            font-size: 0.63rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            padding: 0 12px;
+            display: block;
+        }
+
+        .sidebar-link {
+            color: rgba(255,255,255,0.58);
+            text-decoration: none;
+            padding: 8px 14px 8px 18px;
+            display: flex;
+            align-items: center;
+            border-radius: var(--radius-md);
+            margin: 1px 8px;
+            font-size: 0.875rem;
+            font-weight: 400;
+            position: relative;
+            transition: background-color 0.12s, color 0.12s;
+        }
+        /* Indicador lateral — Teams-style */
+        .sidebar-link::before {
+            content: '';
+            position: absolute;
+            left: 2px;
+            top: 22%;
+            bottom: 22%;
+            width: 2.5px;
+            border-radius: 2px;
+            background: transparent;
+            transition: background 0.12s;
+        }
+        .sidebar-link i {
+            width: 16px;
+            text-align: center;
+            margin-right: 10px;
+            font-size: 0.82rem;
+            opacity: 0.7;
+            transition: opacity 0.12s;
+        }
+        .sidebar-link:hover {
+            background-color: rgba(255,255,255,0.07);
+            color: rgba(255,255,255,0.9);
+        }
+        .sidebar-link:hover i { opacity: 1; }
+        .sidebar-link:hover::before { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+
+        /* Sidebar é sempre-escura (--mb-dark-1) nos dois temas: o acento como
+           texto/ícone/barra usa --accent-light para não sumir com acentos escuros.
+           O fundo é só um tint de 10% — seguro em qualquer acento. */
+        .sidebar-link.active {
+            background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+            color: var(--accent-light);
+            font-weight: 600;
+        }
+        .sidebar-link.active i   { color: var(--accent-light); opacity: 1; }
+        .sidebar-link.active::before { background: var(--accent-light); }
+
+        /* Footer da sidebar */
+        .sidebar-footer {
+            padding: 12px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            margin-top: 12px;
+        }
+        .sidebar-footer-name {
+            color: rgba(255,255,255,0.8);
+            font-size: 0.78rem;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+        .sidebar-footer-meta {
+            color: rgba(255,255,255,0.3);
+            font-size: 0.67rem;
+        }
+        .sidebar-footer-version {
+            color: rgba(255,255,255,0.18);
+            font-size: 0.6rem;
+            margin-top: 8px;
+            letter-spacing: 0.04em;
+        }
+
+        /* ─────────────────────────────────────────────────────────
+           CARDS
+           ───────────────────────────────────────────────────────── */
+        .card {
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-card);
+        }
+        .card-custom {
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-card);
+            background-color: var(--surface-0);
+            transition: box-shadow 0.15s;
+        }
+        .card-custom:hover { box-shadow: 0 3px 10px rgba(0,0,0,0.1); }
+        [data-bs-theme="dark"] .card,
+        [data-bs-theme="dark"] .card-custom {
+            background-color: var(--mb-dark-2);
+            border-color: rgba(255,255,255,0.07);
+        }
+        [data-bs-theme="dark"] .card-custom:hover { box-shadow: 0 3px 10px rgba(0,0,0,0.5); }
+
+        /* ─────────────────────────────────────────────────────────
+           TABELAS — clean, apenas separadores horizontais
+           ───────────────────────────────────────────────────────── */
+        .table {
+            font-size: 0.875rem;
+            --bs-table-border-color: var(--border-color);
+        }
+        .table > :not(caption) > * > * {
+            padding: 10px 14px;
+            vertical-align: middle;
+        }
+        .table thead th {
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            border-bottom-width: 1px;
+            white-space: nowrap;
+        }
+        /* Remove bordas verticais */
+        .table td, .table th          { border-left: none !important; border-right: none !important; }
+        .table-bordered td,
+        .table-bordered th            { border: none; border-bottom: 1px solid var(--border-color); }
+
+        /* ─────────────────────────────────────────────────────────
+           INPUTS E FORMULÁRIOS
+           ───────────────────────────────────────────────────────── */
+        .form-control, .form-select {
+            border-radius: var(--radius-md);
+            border-color: var(--border-color);
+            font-size: 0.875rem;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
+        }
+        [data-bs-theme="dark"] .form-control,
+        [data-bs-theme="dark"] .form-select {
+            background-color: var(--mb-dark-4);
+            border-color: rgba(255,255,255,0.1);
+            color: #e3e5e8;
+        }
+        [data-bs-theme="dark"] .form-control:focus,
+        [data-bs-theme="dark"] .form-select:focus {
+            background-color: var(--mb-dark-4);
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 15%, transparent);
+        }
+        .input-group-text {
+            border-radius: var(--radius-md);
+            border-color: var(--border-color);
+            font-size: 0.875rem;
+        }
+        [data-bs-theme="dark"] .input-group-text {
+            background-color: var(--mb-dark-3);
+            border-color: rgba(255,255,255,0.1);
+            color: #b5bac1;
+        }
+
+        /* ─────────────────────────────────────────────────────────
+           BOTÕES
+           ───────────────────────────────────────────────────────── */
+        .btn {
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.12s;
+        }
+        .btn-sm { font-size: 0.8rem; }
+        .btn-lg { font-size: 0.95rem; border-radius: var(--radius-md); }
+
+        .btn-mb-action {
+            background-color: var(--accent);
+            color: var(--accent-contrast);
+            font-weight: 600;
+            border: none;
+        }
+        .btn-mb-action:hover { background-color: var(--accent-dark); color: #ffffff; }
+
+        .btn-mb-primary {
+            background-color: var(--mb-dark-1);
+            color: #ffffff;
+            border: none;
+        }
+        .btn-mb-primary:hover { background-color: var(--mb-dark-2); color: var(--accent-light); }
+
+        /* ─────────────────────────────────────────────────────────
+           MODAIS — clean header, shadow elevada
+           ───────────────────────────────────────────────────────── */
+        .modal-content {
+            border-radius: var(--radius-lg);
+            border: none;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.08);
+        }
+        [data-bs-theme="dark"] .modal-content {
+            background-color: var(--mb-dark-2);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.35);
+        }
+        .modal-header {
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 20px 14px;
+        }
+        .modal-header .modal-title {
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+        .modal-body   { padding: 20px; }
+        .modal-footer {
+            border-top: 1px solid var(--border-color);
+            padding: 14px 20px;
+        }
+        [data-bs-theme="dark"] .modal-header,
+        [data-bs-theme="dark"] .modal-footer { border-color: rgba(255,255,255,0.08); }
+
+        /* ─────────────────────────────────────────────────────────
+           BADGES
+           ───────────────────────────────────────────────────────── */
+        .badge {
+            font-size: 0.7rem;
+            font-weight: 600;
+            border-radius: 3px;
+            letter-spacing: 0.02em;
+            padding: 3px 7px;
+        }
+
+        /* ─────────────────────────────────────────────────────────
+           ALERTS
+           ───────────────────────────────────────────────────────── */
+        .alert {
+            border-radius: var(--radius-md);
+            border: none;
+            font-size: 0.875rem;
+        }
+
+        /* ─────────────────────────────────────────────────────────
+           DROPDOWN
+           ───────────────────────────────────────────────────────── */
+        .dropdown-menu {
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1), 0 1px 4px rgba(0,0,0,0.06);
+            font-size: 0.875rem;
+            padding: 4px;
+        }
+        .dropdown-item {
+            border-radius: var(--radius-sm);
+            padding: 7px 12px;
+            font-size: 0.875rem;
+        }
+
+        /* ─────────────────────────────────────────────────────────
+           MOBILE
+           ───────────────────────────────────────────────────────── */
+        @media (max-width: 991.98px) {
+            .sidebar {
+                width: 100%;
+                max-width: 100%;
+                min-height: auto;
+                padding-bottom: 16px;
+            }
+            .sidebar-collapse {
+                position: fixed;
+                top: var(--navbar-h);
+                left: 0;
+                width: 100%;
+                height: calc(100vh - var(--navbar-h));
+                overflow-y: auto;
+                z-index: 1030;
+                background-color: var(--mb-dark-1);
+            }
+        }
+
+        /* ─────────────────────────────────────────────────────────
+           ANIMAÇÃO
+           ───────────────────────────────────────────────────────── */
+        .fade-in {
+            animation: fadeIn 0.2s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ─────────────────────────────────────────────────────────
+           SCROLLBAR
+           ───────────────────────────────────────────────────────── */
+        ::-webkit-scrollbar        { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track  { background: transparent; }
+        ::-webkit-scrollbar-thumb  { background: rgba(0,0,0,0.14); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
+        [data-bs-theme="dark"] ::-webkit-scrollbar-thumb       { background: #4e5058; }
+        [data-bs-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+        /* ─────────────────────────────────────────────────────────
+           BARRA DE PROGRESSO DE NAVEGAÇÃO (page-loading)
+           Aparece no topo durante transições de página e submits.
+           ───────────────────────────────────────────────────────── */
+        #page-progress {
+            position: fixed;
+            top: 0; left: 0;
+            width: 0%;
+            height: 3px;
+            background: var(--accent);
+            z-index: 9999;
+            transition: width 0.25s ease, opacity 0.3s ease;
+            opacity: 0;
+        }
+        #page-progress.active {
+            opacity: 1;
+            width: 70%;
+        }
+        #page-progress.done {
+            width: 100%;
+            opacity: 0;
+        }
+    </style>
+
+    {#
+        Acento por usuário — sobrescreve --accent DEPOIS do bloco :root acima.
+        cor_acento_seguro já passou pelo regex ^#[0-9a-fA-F]{6}$ no servidor
+        (context processor → helpers.cor_acento_segura), então é seguro injetar
+        aqui: não há como quebrar o valor CSS. Quando None (sem preferência ou
+        valor inválido no banco), nada é injetado e vale o verde da marca.
+        --accent-contrast vira branco porque a paleta curada garante AA de texto
+        branco sobre qualquer acento selecionável.
+    #}
+    {% if cor_acento_seguro %}
+    <style>
+        :root { --accent: {{ cor_acento_seguro }}; --accent-contrast: #ffffff; }
+    </style>
+    {% endif %}
+</head>
+<body>
+
+    {# Barra de progresso de navegação — controlada por JS #}
+    <div id="page-progress"></div>
+
+    {# ── Calcula iniciais do usuário logado ── #}
+    {% if session.get('nome') %}
+        {% set _parts = session['nome'].split() %}
+        {% set _iniciais = (_parts[0][0] + (_parts[1][0] if _parts|length > 1 else ''))|upper %}
+    {% else %}
+        {% set _iniciais = 'MB' %}
+    {% endif %}
+
+    <nav class="navbar navbar-expand-lg navbar-mb sticky-top">
+        <div class="container-fluid">
+            <button class="navbar-toggler border-0 me-2" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#sidebarMenu"
+                    style="color: var(--accent-light);">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+
+            <a class="navbar-brand" href="{{ url_for('dashboard.index') }}">
+                <i class="fa-solid fa-boxes-stacked me-2 brand-icon"></i>MBAssets
+            </a>
+
+            <div class="ms-auto d-flex align-items-center gap-2">
+
+                <button class="btn-theme-toggle" onclick="mbToggleTheme()" title="Alternar tema">
+                    <i id="mb-theme-icon" class="fa-solid fa-moon"></i>
+                </button>
+
+                {# Seletor de idioma — visível para todos os usuários autenticados #}
+                {% if session.get('user_id') %}
+                <form method="POST" action="{{ url_for('dashboard.trocar_idioma') }}" class="m-0">
+                    <select name="idioma"
+                            class="form-select form-select-sm"
+                            style="width: auto; background: transparent; border-color: rgba(255,255,255,0.15); color: rgba(255,255,255,0.7); font-size: 0.82rem; padding: 3px 22px 3px 8px; cursor: pointer;"
+                            onchange="this.form.submit()"
+                            title="Idioma / Language / Idioma">
+                        <option value="pt" {% if session.get('idioma', 'pt') == 'pt' %}selected{% endif %} style="background: #1e1f22; color: #fff;">PT</option>
+                        <option value="en" {% if session.get('idioma') == 'en' %}selected{% endif %} style="background: #1e1f22; color: #fff;">EN</option>
+                        <option value="es" {% if session.get('idioma') == 'es' %}selected{% endif %} style="background: #1e1f22; color: #fff;">ES</option>
+                    </select>
+                </form>
+                {% endif %}
+
+                <div class="dropdown">
+                    {# Avatar: foto se existir, senão iniciais #}
+                    {% if foto_perfil_url %}
+                    <img src="{{ foto_perfil_url }}"
+                         class="user-avatar dropdown-toggle"
+                         data-bs-toggle="dropdown"
+                         title="{{ session.get('nome', '') }}"
+                         alt="{{ _iniciais }}"
+                         style="object-fit: cover; cursor: pointer;">
+                    {% else %}
+                    <div class="user-avatar dropdown-toggle"
+                         data-bs-toggle="dropdown"
+                         title="{{ session.get('nome', '') }}">
+                        {{ _iniciais }}
+                    </div>
+                    {% endif %}
+
+                    <ul class="dropdown-menu dropdown-menu-end shadow mt-2" style="min-width: 210px;">
+                        <li>
+                            <div class="px-3 py-2 d-flex align-items-center gap-2">
+                                {% if foto_perfil_url %}
+                                <img src="{{ foto_perfil_url }}" class="rounded-circle"
+                                     style="width: 36px; height: 36px; object-fit: cover; flex-shrink:0;" alt="">
+                                {% else %}
+                                <div class="user-avatar-sm flex-shrink-0">{{ _iniciais }}</div>
+                                {% endif %}
+                                <div>
+                                    <div class="fw-bold small" style="color: var(--bs-body-color);">
+                                        {{ session.get('nome', '') }}
+                                    </div>
+                                    <div class="text-muted" style="font-size: 0.7rem;">
+                                        RE {{ session.get('re', '') }} · {{ (session.get('grupo') or '').replace('_', ' ') }}
+                                    </div>
+                                </div>
+                            </div>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="{{ url_for('dashboard.perfil') }}">
+                                <i class="fa-solid fa-circle-user me-2 text-muted"></i>{{ t('nav.perfil') }}
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item text-danger fw-bold" href="{{ url_for('auth.logout') }}">
+                                <i class="fa-solid fa-right-from-bracket me-2"></i>{{ t('nav.sair') }}
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+            </div>
+        </div>
+    </nav>
+
+    {# P7 — Barra de contexto: exibida apenas para usuários acima de CD. #}
+    {% if session.get('nivel_acesso') and session.get('nivel_acesso') != 'CD' %}
+    <div style="background: var(--mb-dark-2); border-bottom: 1px solid rgba(255,255,255,0.06); padding: 5px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+      <span style="color: rgba(255,255,255,0.4); font-size: 0.75rem; white-space: nowrap;">
+        <i class="fa-solid fa-eye me-1"></i>{{ t('ctx.vendo') }}:
+      </span>
+      <form method="POST" action="{{ url_for('dashboard.trocar_contexto') }}" class="m-0">
+        {% set ctx   = session.get('view_context', '') %}
+        {% set nivel = session.get('nivel_acesso', 'CD') %}
+        <select name="contexto" class="form-select form-select-sm"
+                style="width: auto; min-width: 200px; background: var(--mb-dark-4); border-color: rgba(255,255,255,0.12); color: #e3e5e8; font-size: 0.8rem;"
+                onchange="this.form.submit()">
+
+          {% if nivel == 'GLOBAL' %}
+            <option value="GLOBAL" {% if ctx == 'GLOBAL' %}selected{% endif %}>{{ t('ctx.todos_global') }}</option>
+            {% for am in americas %}
+              {% for pais in am.paises %}
+                {% if pais.localidades %}
+                  <optgroup label="{{ am.nome }} — {{ pais.nome }}">
+                    <option value="PAIS:{{ pais.sigla }}" {% if ctx == 'PAIS:' ~ pais.sigla %}selected{% endif %}>
+                      {{ t('ctx.todo_pais') }} {{ pais.nome }}
+                    </option>
+                    {% for loc in pais.localidades %}
+                    <option value="CD:{{ loc.id }}" {% if ctx == 'CD:' ~ loc.id %}selected{% endif %}>
+                      &nbsp;&nbsp;{{ loc.sigla_completa }} — {{ loc.nome }}
+                    </option>
+                    {% endfor %}
+                  </optgroup>
+                {% endif %}
+              {% endfor %}
+            {% endfor %}
+
+          {% elif nivel == 'AMERICA' %}
+            {% for am in americas %}
+              {% if am.id == session.get('america_id') %}
+                <option value="AMERICA:{{ am.sigla }}" {% if ctx == 'AMERICA:' ~ am.sigla %}selected{% endif %}>
+                  {{ t('ctx.toda_america') }} {{ am.nome }}
+                </option>
+                {% for pais in am.paises %}
+                  {% if pais.localidades %}
+                    <optgroup label="{{ pais.nome }}">
+                      <option value="PAIS:{{ pais.sigla }}" {% if ctx == 'PAIS:' ~ pais.sigla %}selected{% endif %}>
+                        {{ t('ctx.todo_pais') }} {{ pais.nome }}
+                      </option>
+                      {% for loc in pais.localidades %}
+                      <option value="CD:{{ loc.id }}" {% if ctx == 'CD:' ~ loc.id %}selected{% endif %}>
+                        {{ loc.sigla_completa }}
+                      </option>
+                      {% endfor %}
+                    </optgroup>
+                  {% endif %}
+                {% endfor %}
+              {% endif %}
+            {% endfor %}
+
+          {% elif nivel == 'PAIS' %}
+            {% for pais in paises %}
+              {% if pais.id == session.get('pais_id') %}
+                <option value="PAIS:{{ pais.sigla }}" {% if ctx == 'PAIS:' ~ pais.sigla %}selected{% endif %}>
+                  {{ t('ctx.todo_pais') }} {{ pais.nome }}
+                </option>
+                {% for loc in pais.localidades %}
+                <option value="CD:{{ loc.id }}" {% if ctx == 'CD:' ~ loc.id %}selected{% endif %}>
+                  {{ loc.sigla_completa }} — {{ loc.nome }}
+                </option>
+                {% endfor %}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+
+        </select>
+      </form>
+      {# U4 — este selo imprimia o enum cru: GLOBAL, AMERICA, PAIS. Ele diz uma
+         coisa util e diferente do seletor ao lado -- ATE ONDE a pessoa pode ver,
+         que nem sempre e o que ela esta vendo agora. A informacao fica; o
+         vocabulario de banco de dados sai. #}
+      <span class="badge" title="{{ t('ctx.alcance_dica') }}"
+            style="background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent-light); font-size: 0.65rem; font-weight: 600; border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);">
+        {{ t('ctx.alcance') }}: {{ t('ctx.nivel.' ~ session.get('nivel_acesso', 'CD')) }}
+      </span>
+    </div>
+    {% endif %}
+
+    <div class="container-fluid">
+        <div class="row">
+            {% block sidebar_column %}
+            <div class="col-lg-2 sidebar collapse d-lg-block" id="sidebarMenu">
+
+                {% block sidebar_nav %}
+                <nav class="nav flex-column px-2 sidebar-nav">
+
+                    {% if has_permissao('dashboard.ver') %}
+                    <span class="sidebar-label mb-2">{{ t('nav.visao_geral') }}</span>
+                    <a class="sidebar-link {{ 'active' if request.endpoint == 'dashboard.index' else '' }}"
+                       href="{{ url_for('dashboard.index') }}">
+                        <i class="fa-solid fa-gauge"></i> {{ t('nav.dashboard') }}
+                    </a>
+                    {% endif %}
+
+                    {% if has_permissao('mov.retirar') or has_permissao('inventario.reportar') %}
+                    <span class="sidebar-label mt-4 mb-2">{{ t('nav.pista') }}</span>
+                    {% endif %}
+
+                    {% if has_permissao('mov.retirar') %}
+                    <a class="sidebar-link {{ 'active' if request.endpoint == 'movimentacao.operacao_index' else '' }}"
+                       href="{{ url_for('movimentacao.operacao_index') }}">
+                        <i class="fa-solid fa-barcode"></i> {{ t('nav.movimentacao') }}
+                    </a>
+                    {% endif %}
+
+                    {% if has_permissao('inventario.reportar') %}
+                    <a class="sidebar-link {{ 'active' if request.endpoint == 'movimentacao.operacao_inventario' else '' }}"
+                       href="{{ url_for('movimentacao.operacao_inventario') }}">
+                        <i class="fa-solid fa-triangle-exclamation"></i> {{ t('nav.reportar_problema') }}
+                    </a>
+                    {% endif %}
+
+                    {% if has_permissao('painel_op.ver') %}
+                    <a class="sidebar-link {{ 'active' if request.endpoint == 'dashboard.relatorio_operacional' else '' }}"
+                       href="{{ url_for('dashboard.relatorio_operacional') }}">
+                        <i class="fa-solid fa-chart-bar"></i> {{ t('nav.painel_operacional') }}
+                    </a>
+                    {% endif %}
+
+                    {% if has_permissao('painel_op.ver') or has_permissao('mov.retirar') %}
+                    <a class="sidebar-link {{ 'active' if request.endpoint == 'dashboard.historico_completo' else '' }}"
+                       href="{{ url_for('dashboard.historico_completo') }}">
+                        <i class="fa-solid fa-clock-rotate-left"></i> {{ t('nav.historico') }}
+                    </a>
+                    {% endif %}
+
+                    {% if has_permissao('admin.inventario_ativos') %}
+                    <span class="sidebar-label mt-4 mb-2">{{ t('nav.gestao_tecnica') }}</span>
+                    {% endif %}
+
+                    {% if has_permissao('admin.inventario_ativos') %}
+                    <a class="sidebar-link {{ 'active' if request.endpoint == 'coletores.gerenciar_coletores' else '' }}"
+                       href="{{ url_for('coletores.gerenciar_coletores') }}">
+                        <i class="fa-solid fa-list-check"></i> {{ t('nav.coletores') }}
+                    </a>
+                    {% endif %}
+
+                    {% if has_permissao('admin.inventario_ativos') %}
+                    <a class="sidebar-link {{ 'active' if request.endpoint == 'complementos.index' else '' }}"
+                       href="{{ url_for('complementos.index') }}">
+                        <i class="fa-solid fa-plug-circle-plus"></i> {{ t('nav.complementos') }}
+                    </a>
+                    {# B2 — bateria tem entrada própria: ela é fungível e some o tempo
+                       todo, enquanto complemento tem patrimônio e dono. Misturar as
+                       duas no mesmo menu foi o que fez a tela ficar impossível de
+                       ensinar. #}
+                    <a class="sidebar-link {{ 'active' if request.endpoint and request.endpoint.startswith('complementos.baterias') else '' }}"
+                       href="{{ url_for('complementos.baterias') }}">
+                        <i class="fa-solid fa-car-battery"></i> {{ t('nav.baterias') }}
+                    </a>
+                    {# H5 — entrada própria: rastreio é OPERAÇÃO, o catálogo é CADASTRO.
+                       Escondido dentro da outra tela, ninguém acharia a cobrança. #}
+                    <a class="sidebar-link {{ 'active' if request.endpoint == 'complementos.rastreio' else '' }}"
+                       href="{{ url_for('complementos.rastreio') }}">
+                        <i class="fa-solid fa-location-crosshairs"></i> {{ t('nav.rastreio') }}
+                    </a>
+                    {% endif %}
+
+                    {% if has_permissao('inventario.liberar_suspenso') %}
+                    <a class="sidebar-link {{ 'active' if request.endpoint == 'suspensos.suspensos_index' else '' }}"
+                       href="{{ url_for('suspensos.suspensos_index') }}">
+                        <i class="fa-solid fa-ban"></i> {{ t('nav.suspensos') }}
+                    </a>
+                    {% endif %}
+
+                    {# Administração — a porta para as telas de cadastro e acesso.
+                       Leva à primeira que o usuário pode abrir; as outras ficam no
+                       menu lateral de lá (base_hub.html). #}
+                    {% if has_permissao('admin.usuarios') %}{% set _adm = url_for('dashboard.gerenciar_usuarios') %}
+                    {% elif has_permissao('admin.colaboradores') %}{% set _adm = url_for('colaboradores.lista') %}
+                    {% elif has_permissao('admin.localidades') %}{% set _adm = url_for('coletores.gerenciar_localidades') %}
+                    {% elif has_permissao('admin.grupos') %}{% set _adm = url_for('dashboard.gerenciar_grupos') %}
+                    {% elif has_permissao('auditoria.ver') %}{% set _adm = url_for('dashboard.auditoria') %}
+                    {% else %}{% set _adm = None %}{% endif %}
+                    {% if _adm %}
+                    <span class="sidebar-label mt-4 mb-2">{{ t('nav.administracao') }}</span>
+                    <a class="sidebar-link" href="{{ _adm }}">
+                        <i class="fa-solid fa-gear"></i> {{ t('nav.administracao') }}
+                    </a>
+                    {% endif %}
+
+                    {# U4 — o glossário é CONSULTA, não operação: fica no fim, fora
+                       dos blocos de trabalho, e sem exigir permissão. Um glossário
+                       que só alguns conseguem abrir falha justamente com quem mais
+                       precisa dele. #}
+                    <a class="sidebar-link {{ 'active' if request.endpoint == 'dashboard.glossario' else '' }}"
+                       href="{{ url_for('dashboard.glossario') }}">
+                        <i class="fa-solid fa-book"></i> {{ t('nav.glossario') }}
+                    </a>
+
+                </nav>
+                {% endblock sidebar_nav %}
+
+                {# ── Footer da Sidebar ── #}
+                <div class="sidebar-footer">
+                    <div class="d-flex align-items-center gap-2">
+                        {% if foto_perfil_url %}
+                        <img src="{{ foto_perfil_url }}" class="rounded-circle"
+                             style="width: 26px; height: 26px; object-fit: cover; flex-shrink:0;" alt="">
+                        {% else %}
+                        <div class="user-avatar-sm">{{ _iniciais }}</div>
+                        {% endif %}
+                        <div>
+                            <div class="sidebar-footer-name">{{ session.get('nome', '') }}</div>
+                            <div class="sidebar-footer-meta">
+                                RE {{ session.get('re', '') }} · {{ (session.get('grupo') or '—').replace('_', ' ') }}
+                            </div>
+                        </div>
+                    </div>
+                    {% block sidebar_version %}
+                    <div class="sidebar-footer-version">
+                        MBAssets
+                    </div>
+                    {% endblock sidebar_version %}
+                </div>
+
+            </div>
+            {% endblock sidebar_column %}
+
+            <main class="{% block main_column_class %}col-lg-10 ms-sm-auto{% endblock %} px-md-4 py-4">
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                  {% if messages %}
+                    {% for category, message in messages %}
+                      <div class="alert alert-{{ category }} alert-dismissible fade show shadow-sm border-0" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                      </div>
+                    {% endfor %}
+                  {% endif %}
+                {% endwith %}
+
+                {% block content %}{% endblock %}
+
+            </main>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='vendor/bootstrap-5.3.0/js/bootstrap.bundle.min.js') }}"></script>
+
+    <script>
+        (function () {
+            var theme = document.documentElement.getAttribute('data-bs-theme') || 'light';
+            var icon  = document.getElementById('mb-theme-icon');
+            if (icon) icon.className = theme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+        })();
+
+        function mbToggleTheme() {
+            var html = document.documentElement;
+            // Alterna a partir do tema RESOLVIDO na tela (cobre o caso 'auto'):
+            // clicar sempre fixa um valor explícito light/dark.
+            var next = html.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-bs-theme', next);
+            localStorage.setItem('mb-theme', next);
+            var icon = document.getElementById('mb-theme-icon');
+            if (icon) icon.className = next === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+            mbPersistTema(next);
+        }
+
+        // Persiste o tema no banco (Usuario.tema) sem recarregar a página.
+        // Espelha trocar_idioma: o valor vira fonte da verdade no próximo load.
+        // Silencioso — se a rede falhar, o localStorage ainda mantém a escolha.
+        function mbPersistTema(tema) {
+            try {
+                var meta = document.querySelector('meta[name="csrf-token"]');
+                fetch({{ url_for('dashboard.trocar_tema')|tojson }}, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': meta ? meta.getAttribute('content') : ''
+                    },
+                    body: 'tema=' + encodeURIComponent(tema)
+                });
+            } catch (e) { /* preferência local já aplicada; persistência é best-effort */ }
+        }
+
+        // ── CSRF: injeta token em todos os forms POST que ainda não o têm ──
+        // Flask-WTF valida o token em todo POST. Forms gerados pelo Jinja via
+        // form.hidden_tag() já incluem — os nossos (HTML puro) precisam
+        // do hidden input adicionado aqui. Um único ponto de manutenção.
+        (function () {
+            var csrfToken = document.querySelector('meta[name="csrf-token"]');
+            if (!csrfToken) return;
+            var token = csrfToken.getAttribute('content');
+            document.querySelectorAll('form').forEach(function (form) {
+                if ((form.method || '').toLowerCase() !== 'post') return;
+                if (form.querySelector('input[name="csrf_token"]')) return;
+                var inp = document.createElement('input');
+                inp.type  = 'hidden';
+                inp.name  = 'csrf_token';
+                inp.value = token;
+                form.appendChild(inp);
+            });
+        })();
+
+        // ── Barra de progresso de navegação ──
+        // Mostra uma barra verde no topo ao clicar em qualquer link de navegação
+        // ou submeter um form POST. Desaparece quando a nova página carrega.
+        // Links com data-no-loading="true", âncoras (#), href="javascript:" e
+        // triggers de modal são ignorados.
+        (function () {
+            var bar = document.getElementById('page-progress');
+            if (!bar) return;
+
+            function startProgress() {
+                bar.classList.remove('done');
+                bar.classList.add('active');
+            }
+            function finishProgress() {
+                bar.classList.remove('active');
+                bar.classList.add('done');
+                setTimeout(function () { bar.classList.remove('done'); }, 400);
+            }
+
+            // Inicia ao navegar para outra página
+            window.addEventListener('beforeunload', startProgress);
+
+            // Finaliza quando a página já carregou (navegação concluída)
+            window.addEventListener('pageshow', finishProgress);
+
+            // Intercepta cliques em links de navegação real
+            document.addEventListener('click', function (e) {
+                var a = e.target.closest('a[href]');
+                if (!a) return;
+                var href = a.getAttribute('href') || '';
+                // Ignora: âncoras, javascript:, data-bs-toggle (modais/tabs), data-no-loading
+                if (
+                    href.startsWith('#') ||
+                    href.startsWith('javascript:') ||
+                    a.dataset.bsToggle ||
+                    a.dataset.noLoading !== undefined ||
+                    e.ctrlKey || e.metaKey || e.shiftKey
+                ) return;
+                startProgress();
+            });
+        })();
+
+        // ── Loading global em forms POST ──
+        // Intercepta o submit de qualquer form POST e desabilita o botão,
+        // adicionando um spinner enquanto o servidor processa a requisição.
+        // Forms com data-no-loading="true" são ignorados (tratamento próprio).
+        // Fallback de 10s re-habilita o botão em caso de falha de rede.
+        document.addEventListener('DOMContentLoaded', function () {
+            // Injeta CSRF em forms montados dinamicamente (modais carregados após DOMContentLoaded)
+            var csrfToken = document.querySelector('meta[name="csrf-token"]');
+            var token = csrfToken ? csrfToken.getAttribute('content') : null;
+
+            document.querySelectorAll('form').forEach(function (form) {
+                if ((form.method || '').toLowerCase() !== 'post') return;
+                // Garante CSRF também nos forms POST descobertos no DOMContentLoaded
+                if (token && !form.querySelector('input[name="csrf_token"]')) {
+                    var inp = document.createElement('input');
+                    inp.type = 'hidden'; inp.name = 'csrf_token'; inp.value = token;
+                    form.appendChild(inp);
+                }
+
+                if (form.dataset.noLoading !== undefined) return;
+
+                form.addEventListener('submit', function () {
+                    var btn = form.querySelector('[type="submit"]:not([disabled])');
+                    if (!btn) return;
+                    var orig = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML =
+                        '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>'
+                        + orig;
+                    // Re-habilita após 10s para não travar a UI em caso de erro
+                    setTimeout(function () {
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                    }, 10000);
+                });
+            });
+        });
+    </script>
+
+    <!-- Indicador de polling — fixo no canto inferior direito, visível apenas em telas com polling ativo -->
+    <div id="polling-indicator" style="display:none; position:fixed; bottom:1.25rem; right:1.25rem; z-index:1050; pointer-events:none;">
+        <div style="display:inline-flex; align-items:center; gap:5px; background:rgba(15,23,42,0.78); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); color:#94a3b8; border-radius:999px; padding:4px 10px 4px 6px; font-size:0.7rem; line-height:1; border:1px solid rgba(255,255,255,0.07); box-shadow:0 2px 10px rgba(0,0,0,0.3);">
+            <svg width="18" height="18" viewBox="0 0 18 18" style="flex-shrink:0;">
+                <circle cx="9" cy="9" r="7" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>
+                <circle id="polling-ring"
+                        cx="9" cy="9" r="7"
+                        fill="none"
+                        stroke="#60a5fa"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-dasharray="43.98"
+                        stroke-dashoffset="0"
+                        transform="rotate(-90 9 9)"
+                        style="transition: stroke-dashoffset 0.85s linear;"/>
+            </svg>
+            <span id="polling-countdown">--</span>s
+        </div>
+    </div>
+
+</body>
+</html>

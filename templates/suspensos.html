@@ -1,0 +1,320 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Suspensos / Identificação{% endblock %}
+{% block content %}
+<div class="container-fluid fade-in">
+
+    {# ── Cabeçalho ── #}
+    <div class="page-header">
+        <div>
+            <h2 class="h3 text-dark fw-bold"><i class="fa-solid fa-ban me-2 text-dark"></i>{{ t('suspensos.titulo') }}</h2>
+            <p class="text-muted small mb-0">{{ t('suspensos.subtitulo') }}</p>
+        </div>
+        <span class="badge bg-dark fs-6 px-3 py-2">
+            {{ t('suspensos.badge_contador', n=suspensos|length) }}
+        </span>
+    </div>
+
+    {# ── Seção 1: Coletores atualmente suspensos ── #}
+    <div class="card card-custom border-0 shadow-sm mb-4">
+        <div class="card-header bg-dark text-white py-3">
+            <h5 class="mb-0 fw-bold"><i class="fa-solid fa-circle-exclamation me-2"></i>{{ t('suspensos.card_titulo') }}</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light">
+                    <tr class="text-uppercase small text-muted">
+                        <th style="width: 11%">{{ t('label.patrimonio') }}</th>
+                        <th style="width: 16%">{{ t('suspensos.col_serial_lacre') }}</th>
+                        <th style="width: 9%">{{ t('suspensos.col_local') }}</th>
+                        <th style="width: 20%">{{ t('suspensos.col_ultimo_uso') }}</th>
+                        <th style="width: 20%">{{ t('suspensos.col_motivo') }}</th>
+                        <th style="width: 14%">{{ t('suspensos.col_status_reativacao') }}</th>
+                        <th class="text-end" style="width: 10%">{{ t('label.acao') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in suspensos %}
+                    {% set mov = ultimo_mov.get(c.id) %}
+                    {% set reativacao_pendente = c.reativacoes | selectattr('status', 'equalto', 'PENDENTE_APROVACAO') | list | first %}
+                    <tr>
+                        <td class="fw-bold font-monospace">{{ c.patrimonio_display }}</td>
+                        <td>
+                            <div class="fw-bold text-dark small">{{ c.serial_number }}</div>
+                            <small class="text-muted"><i class="fa-solid fa-tag me-1"></i>{{ c.numero_identificacao or '—' }}</small>
+                        </td>
+                        <td>
+                            {% if c.localidade %}
+                            <span class="badge bg-secondary">{{ c.localidade.sigla }}</span>
+                            {% else %}
+                            <span class="text-muted small">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if mov %}
+                            <div class="small fw-bold">RE {{ mov.re_colaborador }}</div>
+                            <small class="text-muted">{{ mov.data_saida.strftime('%d/%m/%Y %H:%M') }}</small>
+                            {% else %}
+                            <span class="text-muted small">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if c.descricao_problema %}
+                            <small class="text-danger fst-italic">{{ c.descricao_problema }}</small>
+                            {% else %}
+                            <span class="text-muted small">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if reativacao_pendente %}
+                            <span class="badge bg-warning text-dark">
+                                <i class="fa-solid fa-clock me-1"></i>{{ t('suspensos.aguardando_aprovacao') }}
+                            </span>
+                            <div class="small text-muted mt-1">{{ t('suspensos.por_label') }} {{ reativacao_pendente.reativado_por_nome }}</div>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ t('suspensos.sem_reativacao') }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if reativacao_pendente %}
+                                {# Botão Aprovar — escondido para quem iniciou a reativação #}
+                                {% if reativacao_pendente.reativado_por_re != re_atual %}
+                                <form method="POST"
+                                      action="{{ url_for('suspensos.aprovar_reativacao', reativacao_id=reativacao_pendente.id) }}"
+                                      onsubmit="return confirm('{{ t('suspensos.confirm_aprovar') }}')">
+                                    <button type="submit" class="btn btn-sm btn-success fw-bold">
+                                        <i class="fa-solid fa-circle-check me-1"></i>{{ t('btn.aprovar') }}
+                                    </button>
+                                </form>
+                                {% else %}
+                                <button class="btn btn-sm btn-outline-secondary" disabled
+                                        title="{{ t('suspensos.hint_aguardando_outro_ti') }}">
+                                    <i class="fa-solid fa-user-lock me-1"></i>{{ t('suspensos.aguardando_outro_ti') }}
+                                </button>
+                                {% endif %}
+                            {% else %}
+                            <button class="btn btn-sm btn-outline-dark fw-bold"
+                                    onclick="abrirModalReativar('{{ c.id }}', '{{ c.patrimonio_display }}', '{{ c.serial_number }}')">
+                                <i class="fa-solid fa-rotate me-1"></i>{{ t('suspensos.btn_reativar') }}
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not suspensos %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <i class="fa-solid fa-circle-check fa-2x mb-3 opacity-25 d-block"></i>
+                            {{ t('suspensos.sem_suspensos') }}
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {# ── Seção 2: Histórico de reativações ── #}
+    <div class="card card-custom border-0 shadow-sm">
+        <div class="card-header bg-white py-3 border-bottom">
+            <h5 class="mb-0 fw-bold text-dark"><i class="fa-solid fa-clock-rotate-left me-2"></i>{{ t('suspensos.historico_titulo') }}</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light">
+                    <tr class="text-uppercase small text-muted">
+                        <th style="width: 5%">#</th>
+                        <th style="width: 13%">{{ t('suspensos.col_equipamento') }}</th>
+                        <th style="width: 15%">{{ t('suspensos.col_instalou') }}</th>
+                        <th style="width: 14%">{{ t('suspensos.col_data_reativacao') }}</th>
+                        <th style="width: 13%">{{ t('manutencao.col_aprovado') }}</th>
+                        <th style="width: 14%">{{ t('suspensos.col_data_aprovacao') }}</th>
+                        <th style="width: 10%">{{ t('suspensos.col_foto') }}</th>
+                        <th style="width: 10%">{{ t('label.status') }}</th>
+                        <th style="width: 6%">{{ t('suspensos.col_declaracao') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in historico %}
+                    <tr>
+                        <td class="text-muted small font-monospace">#{{ r.id }}</td>
+                        <td>
+                            <span class="fw-bold font-monospace">{{ r.coletor.patrimonio_display }}</span>
+                            <div class="text-muted small">{{ r.coletor.serial_number }}</div>
+                        </td>
+                        <td>
+                            <div class="small fw-bold">{{ r.reativado_por_nome or '—' }}</div>
+                            <small class="text-muted font-monospace">RE {{ r.reativado_por_re }}</small>
+                        </td>
+                        <td class="small">{{ r.data_reativacao.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td>
+                            {% if r.aprovado_por_nome %}
+                            <div class="small fw-bold">{{ r.aprovado_por_nome }}</div>
+                            <small class="text-muted font-monospace">RE {{ r.aprovado_por_re }}</small>
+                            {% else %}
+                            <span class="text-muted small">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="small">
+                            {% if r.data_aprovacao %}
+                            {{ r.data_aprovacao.strftime('%d/%m/%Y %H:%M') }}
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button type="button"
+                                    class="btn btn-sm btn-light border text-primary"
+                                    onclick="verFotoIdentificacao('/uploads/fotos/{{ r.foto_identificacao }}')"
+                                    title="{{ t('suspensos.ver_foto') }}">
+                                <i class="fa-solid fa-image"></i>
+                            </button>
+                        </td>
+                        <td>
+                            {% if r.status == 'APROVADO' %}
+                            <span class="badge bg-success">{{ t('suspensos.status_aprovado') }}</span>
+                            {% else %}
+                            <span class="badge bg-warning text-dark">{{ t('suspensos.status_pendente') }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if r.declaracao_aceita %}
+                            <i class="fa-solid fa-circle-check text-success" title="Declaração aceita"></i>
+                            {% else %}
+                            <i class="fa-solid fa-circle-xmark text-danger"></i>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not historico %}
+                    <tr>
+                        <td colspan="9" class="text-center py-4 text-muted">{{ t('suspensos.sem_historico') }}</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+{# ── Modal: Reativar Coletor ── #}
+<div class="modal fade" id="modalReativar" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold">
+                    <i class="fa-solid fa-rotate me-2"></i>{{ t('suspensos.modal_titulo') }}
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('suspensos.reativar') }}" enctype="multipart/form-data">
+                <input type="hidden" name="coletor_id" id="modal_coletor_id">
+                <div class="modal-body">
+
+                    {# Identificação do equipamento #}
+                    <div class="alert alert-dark d-flex align-items-center gap-3 mb-4">
+                        <i class="fa-solid fa-microchip fa-lg"></i>
+                        <div>
+                            <div class="fw-bold" id="modal_patrimonio"></div>
+                            <small class="font-monospace" id="modal_serial"></small>
+                        </div>
+                    </div>
+
+                    {# Foto obrigatória #}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            {{ t('suspensos.label_foto') }}
+                            <span class="text-danger">*</span>
+                        </label>
+                        <input type="file" class="form-control" name="foto_identificacao" id="foto_identificacao"
+                               accept=".jpg,.jpeg,.png,.webp" required>
+                        <div class="form-text">
+                            <i class="fa-solid fa-camera me-1"></i>
+                            {{ t('suspensos.hint_foto') }}
+                        </div>
+                    </div>
+
+                    {# Preview da foto #}
+                    <div id="preview_container" class="d-none mb-3 text-center">
+                        <img id="foto_preview" class="rounded border" style="max-height: 180px; max-width: 100%;" alt="Preview">
+                    </div>
+
+                    {# Declaração de responsabilidade #}
+                    <div class="card border-danger mb-0">
+                        <div class="card-body py-3">
+                            <div class="form-check">
+                                <input class="form-check-input border-danger" type="checkbox"
+                                       name="declaracao" id="declaracao" required
+                                       onchange="toggleBtnReativar()">
+                                <label class="form-check-label small fw-bold text-danger" for="declaracao">
+                                    {{ t('suspensos.declaracao_texto') }}
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('btn.cancelar') }}</button>
+                    <button type="submit" class="btn btn-dark fw-bold" id="btn_reativar" disabled>
+                        <i class="fa-solid fa-rotate me-1"></i>{{ t('suspensos.btn_registrar') }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# ── Modal: Visualizar Foto da Identificação ── #}
+<div class="modal fade" id="modalFotoIdentificacao" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0">
+            <div class="modal-header py-2">
+                <h6 class="modal-title fw-bold"><i class="fa-solid fa-image me-2"></i>{{ t('suspensos.foto_titulo') }}</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center p-2">
+                <img id="fotoIdentificacaoImg" src="" class="img-fluid rounded" alt="Foto da identificação" style="max-height: 70vh;">
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function verFotoIdentificacao(url) {
+        document.getElementById('fotoIdentificacaoImg').src = url;
+        new bootstrap.Modal(document.getElementById('modalFotoIdentificacao')).show();
+    }
+
+    function abrirModalReativar(id, patrimonio, serial) {
+        document.getElementById('modal_coletor_id').value = id;
+        document.getElementById('modal_patrimonio').textContent  = patrimonio;
+        document.getElementById('modal_serial').textContent      = serial;
+        // Limpa campos anteriores
+        document.getElementById('foto_identificacao').value  = '';
+        document.getElementById('declaracao').checked = false;
+        document.getElementById('btn_reativar').disabled = true;
+        document.getElementById('preview_container').classList.add('d-none');
+        new bootstrap.Modal(document.getElementById('modalReativar')).show();
+    }
+
+    // Habilita o botão de reativação apenas quando a declaração está marcada
+    function toggleBtnReativar() {
+        const ok = document.getElementById('declaracao').checked;
+        document.getElementById('btn_reativar').disabled = !ok;
+    }
+
+    // Preview da foto antes do upload
+    document.getElementById('foto_identificacao').addEventListener('change', function () {
+        const file = this.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            document.getElementById('foto_preview').src = e.target.result;
+            document.getElementById('preview_container').classList.remove('d-none');
+        };
+        reader.readAsDataURL(file);
+    });
+</script>
+{% endblock %}

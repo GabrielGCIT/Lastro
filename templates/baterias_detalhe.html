@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}{{ t('baterias.detalhe_titulo') }} — {{ cartao.localidade.sigla }}{% endblock %}
+
+{# Pacote B / B2 — o cenário de UM CD.
+
+   Duas metades, nesta ordem: primeiro o CADASTRO (o que o CD diz ter), depois a
+   REALIDADE (quem está com o quê, e há quanto tempo). O ajuste vem antes porque
+   é a ação; a lista vem depois porque é a consulta. #}
+
+{% block content %}
+<style>
+/* Os dois cartões de ajuste: ícone grande, número grande, mais e menos do lado.
+   Sem dropdown de categoria, sem formulário — a conferência de prateleira é
+   olhar a pilha e digitar quantas são. */
+.bat-ajuste { border: 2px solid transparent; border-radius: .5rem; padding: 1.25rem;
+              text-align: center; }
+.bat-ajuste-frio { background: #d9f0f7; border-color: #9fd7e6; color: #0b6e85; }
+.bat-ajuste-seco { background: #fbebd8; border-color: #eccca0; color: #8a4b0a; }
+.bat-ajuste .fa-solid { font-size: 2.4rem; }
+.bat-ajuste-nome { font-weight: 700; font-size: .95rem; margin: .5rem 0 .75rem; }
+.bat-stepper { display: flex; align-items: center; justify-content: center; gap: .5rem; }
+.bat-stepper input { width: 5.5rem; text-align: center; font-size: 1.35rem;
+                     font-weight: 700; font-variant-numeric: tabular-nums; }
+.bat-stepper button { width: 2.6rem; height: 2.6rem; font-size: 1.2rem;
+                      font-weight: 700; line-height: 1; }
+</style>
+
+<div class="container-fluid px-4 py-4">
+
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb small">
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('complementos.baterias') }}"
+                   class="text-muted text-decoration-none">{{ t('baterias.titulo') }}</a>
+            </li>
+            <li class="breadcrumb-item active">{{ cartao.localidade.sigla }}</li>
+        </ol>
+    </nav>
+
+    <div class="mb-4">
+        <h2 class="fw-bold text-dark mb-1">
+            <i class="fa-solid fa-car-battery me-2"></i>{{ cartao.localidade.sigla }}
+            <span class="text-muted fw-normal">· {{ cartao.localidade.nome }}</span>
+        </h2>
+        <p class="text-muted mb-0 small">{{ t('baterias.detalhe_sub') }}</p>
+    </div>
+
+    {# ── o que este CD tem agora ── #}
+    <div class="row g-3 mb-4">
+        {% for rotulo, valor, cor in [
+            (t('baterias.cadastradas_rotulo'), cartao.cadastrada, 'dark'),
+            (t('baterias.disponiveis'),        cartao.disponivel, 'success'),
+            (t('baterias.em_uso'),             cartao.em_campo,   'primary'),
+            (t('baterias.em_atraso'),          cartao.atrasadas,  'danger')] %}
+        <div class="col-6 col-xl-3">
+            <div class="card card-custom border-0 shadow-sm h-100">
+                <div class="card-body py-3">
+                    <p class="text-muted mb-0 small text-uppercase fw-bold">{{ rotulo }}</p>
+                    <h2 class="mb-0 fw-bold text-{{ cor if valor else 'muted' }}">
+                        {{ valor if valor is not none else '—' }}
+                    </h2>
+                    {# Mesma razão do card: o atraso sai de dentro do que está na rua. #}
+                    {% if rotulo == t('baterias.em_atraso') %}
+                    <small class="text-muted">{{ t('baterias.destas_na_rua') }}</small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {# ── 1. o ajuste, em dois cartões ── #}
+    <div class="card card-custom border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-3 pb-0">
+            <h5 class="fw-bold mb-0">{{ t('baterias.ajuste_titulo') }}</h5>
+            <small class="text-muted">{{ t('baterias.ajuste_sub') }}</small>
+        </div>
+        <div class="card-body">
+            {% if not ajuste %}
+            <div class="alert alert-secondary mb-0 small">{{ t('baterias.sem_tipos') }}</div>
+            {% else %}
+            <form method="POST"
+                  action="{{ url_for('complementos.baterias_salvar', loc_id=cartao.localidade.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="row g-3 justify-content-center">
+                    {# Uma carta por TIPO de bateria, exista estoque ou não. #}
+                    {% for cat, cadastrada in ajuste %}
+                    {# A aparência vem do TIPO, escolhida no cadastro — não da
+                       câmara, que é regra de compatibilidade e não de identidade. #}
+                    {% set fundo, borda, texto = cor_de_bateria(cat.cor) %}
+                    <div class="col-sm-6 col-lg-4">
+                        <div class="bat-ajuste"
+                             style="background:{{ fundo }}; border-color:{{ borda }};
+                                    color:{{ texto }};">
+                            <i class="fa-solid {{ cat.icone or 'fa-battery-full' }}"></i>
+                            <div class="bat-ajuste-nome">{{ cat.nome }}</div>
+                            <div class="bat-stepper">
+                                <button type="button" class="btn btn-light border js-menos"
+                                        aria-label="{{ t('baterias.menos') }}">−</button>
+                                <input type="number" class="form-control" min="0" step="1"
+                                       name="qtd_{{ cat.id }}"
+                                       value="{{ cadastrada if cadastrada is not none else '' }}"
+                                       placeholder="—"
+                                       aria-label="{{ cat.nome }}">
+                                <button type="button" class="btn btn-light border js-mais"
+                                        aria-label="{{ t('baterias.mais') }}">+</button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+
+                    {# 🔴 O cartão que FALTA é o próprio convite. Foi assim que o
+                       Gabriel travou: procurou a climatizada, não achou, e a tela
+                       não dizia nem que ela não existia nem onde criar. #}
+                    <div class="col-sm-6 col-lg-4">
+                        <div class="bat-ajuste d-flex flex-column justify-content-center"
+                             style="border:2px dashed #ced4da; background:#fff; min-height:100%;">
+                            <i class="fa-solid fa-plus text-muted"></i>
+                            <div class="bat-ajuste-nome text-muted">{{ t('baterias.falta_tipo') }}</div>
+                            <div>
+                                <a href="{{ url_for('complementos.baterias') }}#tipos"
+                                   class="btn btn-outline-secondary btn-sm">
+                                    {{ t('baterias.criar_tipo') }}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="text-center mt-4">
+                    <button type="submit" class="btn btn-primary fw-bold px-5">
+                        <i class="fa-solid fa-floppy-disk me-2"></i>{{ t('baterias.btn_salvar') }}
+                    </button>
+                    <div class="form-text mt-2">{{ t('baterias.ajuste_dica') }}</div>
+                </div>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ── 2. a realidade: com quem está o que saiu ── #}
+    <div class="card card-custom border-0 shadow-sm">
+        <div class="card-header bg-white border-0 pt-3">
+            <h5 class="fw-bold mb-0">{{ t('baterias.fora_titulo') }}</h5>
+            <small class="text-muted">{{ t('baterias.fora_sub') }}</small>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr class="small text-uppercase text-muted">
+                        <th>{{ t('rastreio.col_quem') }}</th>
+                        <th>{{ t('rastreio.col_categoria') }}</th>
+                        <th class="text-center">{{ t('rastreio.col_qtd') }}</th>
+                        <th>{{ t('rastreio.col_coletor') }}</th>
+                        <th>{{ t('rastreio.col_desde') }}</th>
+                        <th class="text-end">{{ t('rastreio.col_tempo') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for linha in cartao.linhas %}
+                    {% for p in linha.portadores %}
+                    {% set mov = p.movimentacao %}
+                    <tr class="{{ 'table-danger' if p.situacao != 'NO_PRAZO' }}">
+                        <td>
+                            <strong>{{ mov.colaborador.nome if mov.colaborador
+                                       else 'RE ' ~ mov.re_colaborador }}</strong>
+                            {% if p.situacao == 'FALTOU' %}
+                            <span class="badge bg-danger ms-1">{{ t('rastreio.nao_voltou') }}</span>
+                            {% elif p.situacao == 'ATRASADO' %}
+                            <span class="badge bg-danger ms-1">{{ t('rastreio.atrasado') }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="small">{{ linha.categoria.nome }}</td>
+                        <td class="text-center fw-bold">{{ p.faltando }}</td>
+                        <td class="small">
+                            {% if mov.coletor %}
+                            <a href="{{ url_for('dashboard.historico_coletor', coletor_id=mov.coletor.id) }}"
+                               class="text-decoration-none">{{ mov.coletor.rotulo }}</a>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="small">
+                            {{ mov.data_saida.strftime('%d/%m/%Y %H:%M') if mov.data_saida else '—' }}
+                        </td>
+                        <td class="text-end small {{ 'text-danger fw-bold' if p.situacao != 'NO_PRAZO' else 'text-muted' }}">
+                            {{ tempo_fora(p.horas_fora) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% endfor %}
+                    {% if not cartao.em_campo %}
+                    <tr><td colspan="6" class="text-center text-muted py-4">
+                        {{ t('baterias.nada_fora') }}
+                    </td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+// Mais e menos ao lado do campo. O teclado continua funcionando: quem prefere
+// digitar 47 digita 47, sem clicar 47 vezes.
+document.querySelectorAll('.bat-stepper').forEach(function (grupo) {
+    var campo = grupo.querySelector('input');
+    function ajustar(delta) {
+        var atual = parseInt(campo.value, 10);
+        if (isNaN(atual)) { atual = 0; }
+        campo.value = Math.max(0, atual + delta);
+    }
+    grupo.querySelector('.js-mais').addEventListener('click', function () { ajustar(1); });
+    grupo.querySelector('.js-menos').addEventListener('click', function () { ajustar(-1); });
+});
+</script>
+{% endblock %}

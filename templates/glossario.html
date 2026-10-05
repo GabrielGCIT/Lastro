@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ t('glossario.titulo') }}{% endblock %}
+
+{# U4 — o glossário.
+
+   🔴 Nem toda palavra dá para trocar. "Coletor", "câmara" e "RE" são o
+   vocabulário REAL da operação: quem trabalha no CD usa esses termos todo dia, e
+   traduzi-los deixaria a tela mais estranha, não mais clara. O que faltava era
+   um lugar para quem chega novo descobrir o que cada um significa NESTE sistema
+   — sem depender de alguém do lado explicando.
+
+   Ordenado pelo caminho do equipamento, não pelo alfabeto: quem lê uma vez
+   entende o fluxo junto com os termos. #}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+
+    <div class="mb-4">
+        <h2 class="fw-bold text-dark mb-1">
+            <i class="fa-solid fa-book me-2"></i>{{ t('glossario.titulo') }}
+        </h2>
+        <p class="text-muted mb-0">{{ t('glossario.subtitulo') }}</p>
+    </div>
+
+    <div class="row g-3">
+        {% for termo, definicao, exemplo in glossario %}
+        <div class="col-md-6 col-xl-4">
+            <div class="card card-custom border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-2">{{ termo }}</h5>
+                    <p class="mb-2">{{ definicao }}</p>
+                    {% if exemplo %}
+                    <p class="small text-muted mb-0 fst-italic">
+                        <i class="fa-solid fa-arrow-turn-up fa-rotate-90 me-1"></i>{{ exemplo }}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="alert alert-info mt-4 mb-0 d-flex align-items-center gap-2">
+        <i class="fa-solid fa-circle-info"></i>
+        <div class="small">{{ t('glossario.rodape') }}</div>
+    </div>
+
+</div>
+{% endblock %}

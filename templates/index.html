@@ -1,0 +1,434 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="container-fluid fade-in">
+
+    {# ── Cabeçalho ── #}
+    <div class="page-header">
+        <div>
+            <h1 class="h2 text-dark fw-bold mb-0">{{ t('dashboard.titulo_cd') }}</h1>
+            <small class="text-muted">{{ t('dashboard.subtitulo') }}</small>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span id="polling-badge" class="badge bg-success bg-opacity-10 text-success border border-success"
+                  style="font-size:0.65rem; display:none !important;">
+                <i class="fa-solid fa-circle-dot fa-beat me-1" style="font-size:0.5rem;"></i>
+                <span id="polling-ts-dash"></span>
+            </span>
+            <a href="{{ url_for('dashboard.exportar_excel') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fa-solid fa-file-csv me-1"></i>{{ t('btn.exportar') }}
+            </a>
+        </div>
+    </div>
+
+    {# ── Alerta: contas criadas em campo (apenas TI) ── #}
+    {% if has_permissao('admin.revisar_campo') and usuarios_campo > 0 %}
+    <div class="alert alert-info d-flex align-items-center gap-3 mb-3 shadow-sm">
+        <i class="fa-solid fa-user-clock fa-2x text-info"></i>
+        <div class="flex-fill">
+            <strong>{{ usuarios_campo }} conta(s)</strong> {{ t('dashboard.alerta.contas_campo_texto') }}
+            <span class="text-muted small ms-1">{{ t('dashboard.alerta.contas_campo_hint') }}</span>
+        </div>
+        <a href="{{ url_for('dashboard.gerenciar_usuarios') }}" class="btn btn-info btn-sm fw-bold text-white">
+            <i class="fa-solid fa-users me-1"></i>{{ t('dashboard.btn_revisar') }}
+        </a>
+    </div>
+    {% endif %}
+
+    {# ── U2: o que precisa de decisão hoje ──────────────────────────────────
+       Gestão por exceção: o painel abre pelo que está errado, não pelo que está
+       certo. Cada linha leva à lista que a originou — número que não vira ação é
+       só número. Some inteiro quando não há nada pendente: alerta que acende
+       todo dia deixa de ser lido. #}
+    {% set decisoes = [] %}
+    {% if total_pendencias %}{% set _ = decisoes.append(1) %}{% endif %}
+    {% if suspensos_aguardando %}{% set _ = decisoes.append(1) %}{% endif %}
+    {% if decisoes %}
+    <div class="card card-custom border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-3 pb-2">
+            <h5 class="fw-bold mb-0">
+                <i class="fa-solid fa-circle-exclamation me-2 text-danger"></i>{{ t('dashboard.decisoes_titulo') }}
+            </h5>
+            <small class="text-muted">{{ t('dashboard.decisoes_sub') }}</small>
+        </div>
+        <div class="list-group list-group-flush">
+            {% if total_pendencias %}
+            <a href="{{ url_for('coletores.gerenciar_coletores', pendencia=1) }}"
+               class="list-group-item list-group-item-action d-flex align-items-center gap-3">
+                <span class="badge bg-danger rounded-pill fs-6">{{ total_pendencias }}</span>
+                <span class="flex-fill">{{ t('dashboard.decisao_complementos') }}</span>
+                <i class="fa-solid fa-chevron-right text-muted small"></i>
+            </a>
+            {% endif %}
+            {% if suspensos_aguardando and has_permissao('inventario.liberar_suspenso') %}
+            {# Suspenso tem tela e ação próprias. #}
+            <a href="{{ url_for('suspensos.suspensos_index') }}"
+               class="list-group-item list-group-item-action d-flex align-items-center gap-3">
+                <span class="badge bg-dark rounded-pill fs-6">{{ suspensos_aguardando }}</span>
+                <span class="flex-fill">{{ t('dashboard.decisao_suspensos') }}</span>
+                <i class="fa-solid fa-chevron-right text-muted small"></i>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# ── H4: complementos que não voltaram ──────────────────────────────────
+       Fica ACIMA dos KPIs de propósito. Os números da frota são leitura de
+       rotina; isto é cobrança, tem dono e tem prazo. Abaixo dos cards viraria
+       mais um painel — e um painel que ninguém rola não cobra ninguém. #}
+    {% if pendencias_complemento %}
+    <div class="card card-custom border-danger border-2 mb-4 shadow-sm">
+        <div class="card-header bg-danger text-white d-flex align-items-center gap-2 py-2">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <strong class="flex-fill">
+                {{ t('pendcomp.dash_titulo') }} — {{ total_pendencias }} {{ t('pendcomp.itens') }}
+            </strong>
+            <a href="{{ url_for('coletores.gerenciar_coletores') }}"
+               class="btn btn-light btn-sm fw-bold">
+                <i class="fa-solid fa-list me-1"></i>{{ t('pendcomp.ver_inventario') }}
+            </a>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr class="small text-uppercase text-muted">
+                        <th>{{ t('pendcomp.col_coletor') }}</th>
+                        <th>{{ t('pendcomp.col_falta') }}</th>
+                        <th>{{ t('pendcomp.col_quem') }}</th>
+                        <th>{{ t('pendcomp.col_quando') }}</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in pendencias_complemento %}
+                    {% set mov = p.movimentacao %}
+                    <tr>
+                        <td class="fw-bold">{{ mov.coletor.rotulo if mov.coletor else '—' }}</td>
+                        <td class="text-danger fw-bold">{{ descrever_pendencia(p) }}</td>
+                        <td>
+                            {{ mov.colaborador.nome if mov.colaborador else 'RE ' ~ mov.re_colaborador }}
+                            <span class="text-muted small">
+                                {% if mov.colaborador %}· RE {{ mov.colaborador.re }}{% endif %}
+                            </span>
+                        </td>
+                        <td class="small">
+                            {# H5 — o que ainda está em campo só chega aqui depois de
+                               estourar o prazo, então o tempo fora é a informação que
+                               importa: é ele que mede o tamanho do atraso. #}
+                            {% if mov.data_retorno %}
+                                {{ mov.data_retorno.strftime('%d/%m/%Y %H:%M') }}
+                            {% else %}
+                                <span class="badge bg-danger">{{ t('pendcomp.atrasado') }}</span>
+                                <span class="text-muted">{{ tempo_fora(p.horas_fora) }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {# 🔴 Até aqui a falta só saía da tela pela devolução do
+                               COLETOR — e o coletor já voltou. Sem este botão, a
+                               bateria que aparece no dia seguinte não tinha onde ser
+                               registrada: a linha ficava para sempre e o saldo do CD
+                               ficava errado para menos. #}
+                            <form method="POST" class="d-inline"
+                                  action="{{ url_for('complementos.pendencia_devolver', linha_id=p.id) }}"
+                                  onsubmit="return confirm(RECEBI_CONFIRMA);">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="voltar" value="{{ request.full_path }}">
+                                <button type="submit" class="btn btn-success btn-sm"
+                                        title="{{ t('pendcomp.recebi_titulo') }}">
+                                    <i class="fa-solid fa-check me-1"></i>{{ t('pendcomp.recebi') }}
+                                </button>
+                            </form>
+                            {% if mov.coletor %}
+                            <a href="{{ url_for('dashboard.historico_coletor', coletor_id=mov.coletor.id) }}"
+                               class="btn btn-outline-danger btn-sm">
+                                <i class="fa-solid fa-clock-rotate-left"></i>
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if total_pendencias > pendencias_complemento|length %}
+        <div class="card-footer small text-muted py-2">
+            {{ t('pendcomp.mais_no_inventario') }}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {# ── KPIs — linha 1 (frota) ── #}
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-xl-3">
+            <a href="{{ url_for('coletores.gerenciar_coletores') }}" class="text-decoration-none text-reset">
+                    <div class="card card-custom h-100 border-top border-3 border-primary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-0 small text-uppercase fw-bold">{{ t('dashboard.kpi.total_ativos') }}</p>
+                            <h2 class="mb-0 fw-bold text-dark" id="kpi-total">{{ total }}</h2>
+                        </div>
+                        <div class="text-primary bg-light rounded p-3">
+                            <i class="fa-solid fa-server fa-lg"></i>
+                        </div>
+                    </div>
+                    {% if total > 0 %}
+                    <div class="mt-2">
+                        <div class="progress" style="height: 4px;">
+                            <div class="progress-bar bg-success"  style="width: {{ (disponiveis/total*100)|int }}%"></div>
+                            <div class="progress-bar bg-warning"  style="width: {{ (em_uso/total*100)|int }}%"></div>
+                            <div class="progress-bar bg-danger"   style="width: {{ (manutencao/total*100)|int }}%"></div>
+                        </div>
+                        <small class="text-muted" style="font-size: 0.7rem;">
+                            {{ t('dashboard.legenda_progresso') }}
+                        </small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+                </a>
+        </div>
+
+        <div class="col-6 col-xl-3">
+            <a href="{{ url_for('coletores.gerenciar_coletores', status='Disponível') }}" class="text-decoration-none text-reset">
+                    <div class="card card-custom h-100 border-top border-3 border-success">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-0 small text-uppercase fw-bold">{{ t('dashboard.kpi.disponiveis') }}</p>
+                            <h2 class="mb-0 fw-bold text-success" id="kpi-disponiveis">{{ disponiveis }}</h2>
+                            {% if total > 0 %}
+                            <small class="text-muted">{{ (disponiveis/total*100)|int }}{{ t('dashboard.kpi.pct_frota') }}</small>
+                            {% endif %}
+                        </div>
+                        <div class="text-success bg-light rounded p-3">
+                            <i class="fa-solid fa-check-circle fa-lg"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+                </a>
+        </div>
+
+        <div class="col-6 col-xl-3">
+            <a href="{{ url_for('coletores.gerenciar_coletores', status='Em Uso') }}" class="text-decoration-none text-reset">
+                    <div class="card card-custom h-100 border-top border-3 border-warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-0 small text-uppercase fw-bold">{{ t('dashboard.kpi.em_operacao') }}</p>
+                            <h2 class="mb-0 fw-bold text-warning" id="kpi-em-uso">{{ em_uso }}</h2>
+                            {% if total > 0 %}
+                            <small class="text-muted">{{ (em_uso/total*100)|int }}{{ t('dashboard.kpi.pct_frota') }}</small>
+                            {% endif %}
+                        </div>
+                        <div class="text-warning bg-light rounded p-3">
+                            <i class="fa-solid fa-person-digging fa-lg"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+                </a>
+        </div>
+
+        <div class="col-6 col-xl-3">
+            <a href="{{ url_for('coletores.gerenciar_coletores', status=STATUS_INDISPONIVEIS) }}" class="text-decoration-none text-reset">
+                    <div class="card card-custom h-100 border-top border-3 border-danger">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-0 small text-uppercase fw-bold">{{ t('dashboard.kpi.indisponiveis') }}</p>
+                            <h2 class="mb-0 fw-bold text-danger" id="kpi-manutencao">{{ manutencao }}</h2>
+                        </div>
+                        <div class="text-danger bg-light rounded p-3">
+                            <i class="fa-solid fa-triangle-exclamation fa-lg"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+                </a>
+        </div>
+    </div>
+
+    {# ── KPIs — linha 2: o que está em falta ── #}
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-xl-3">
+            <a href="{{ url_for('coletores.gerenciar_coletores', pendencia=1) }}"
+               class="text-decoration-none text-reset">
+                <div class="card card-custom h-100 border-top border-3 border-danger">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <p class="text-muted mb-0 small text-uppercase fw-bold">
+                                    {{ t('dashboard.kpi.em_falta') }}
+                                </p>
+                                <h2 class="mb-0 fw-bold {{ 'text-danger' if total_pendencias else 'text-dark' }}">
+                                    {{ total_pendencias }}
+                                </h2>
+                            </div>
+                            <div class="text-danger bg-light rounded p-3">
+                                <i class="fa-solid fa-box-open fa-lg"></i>
+                            </div>
+                        </div>
+                        <div class="mt-2 pt-2 border-top">
+                            <small class="text-muted">{{ t('dashboard.kpi.em_falta_sub') }}</small>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    {# ── Linha inferior: Últimas movimentações ── #}
+    <div class="row g-4">
+
+        {# Últimas movimentações #}
+        <div class="col-lg-12">
+            <div class="card card-custom shadow-sm h-100">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0 fw-bold text-dark">
+                        <i class="fa-solid fa-clock-rotate-left me-2 text-muted"></i>{{ t('dashboard.ultimas_movimentacoes') }}
+                    </h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>{{ t('label.patrimonio') }}</th>
+                                <th>{{ t('dashboard.col_colaborador') }}</th>
+                                <th>{{ t('dashboard.col_saida') }}</th>
+                                <th>{{ t('label.status') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if movimentacoes %}
+                            {% for mov in movimentacoes %}
+                            <tr>
+                                <td>
+                                    <div class="fw-bold font-monospace">{{ mov.coletor.patrimonio_display }}</div>
+                                    <small class="text-muted">{{ mov.coletor.serial_number }}</small>
+                                </td>
+                                <td>{{ mov.re_colaborador }}</td>
+                                <td>{{ mov.data_saida.strftime('%d/%m %H:%M') }}</td>
+                                <td>
+                                    {% if mov.data_retorno %}
+                                        <span class="badge bg-success">{{ t('dashboard.status_devolvido') }}</span>
+                                        {% if mov.foto_devolucao %}
+                                        <i class="fa-solid fa-camera text-muted ms-1" title="Foto registrada"></i>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">{{ t('dashboard.status_em_aberto') }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted">
+                                    {{ t('dashboard.sem_movimentacoes') }}
+                                </td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card-footer bg-white text-end">
+                    <a href="{{ url_for('dashboard.historico_completo') }}" class="btn btn-sm btn-outline-primary">
+                        {{ t('dashboard.btn_ver_historico') }}
+                    </a>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    {# P7 — Dashboard consolidado: visível apenas para usuários acima de CD com múltiplos CDs #}
+    {% if localidades_resumo and localidades_resumo|length > 1 %}
+    <div class="row g-4 mt-1">
+        <div class="col-12">
+            <div class="card card-custom shadow-sm">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold text-dark">
+                        <i class="fa-solid fa-building me-2 text-muted"></i>{{ t('dashboard.frota_localidade') }}
+                    </h5>
+                    <span class="badge bg-secondary">{{ localidades_resumo|length }} {{ t('dashboard.cds_no_contexto') }}</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-3">{{ t('dashboard.col_cd') }}</th>
+                                <th class="text-center">{{ t('dashboard.col_total') }}</th>
+                                <th class="text-center text-success">{{ t('dashboard.kpi.disponiveis') }}</th>
+                                <th class="text-center text-warning">{{ t('dashboard.col_em_uso') }}</th>
+                                <th class="text-center text-danger">{{ t('dashboard.kpi.indisponiveis') }}</th>
+                                <th>{{ t('dashboard.col_distribuicao') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for loc, tot, disp, uso, manut in localidades_resumo %}
+                            <tr>
+                                <td class="ps-3 fw-bold font-monospace">{{ loc.sigla_completa }}</td>
+                                <td class="text-center fw-bold">{{ tot }}</td>
+                                <td class="text-center text-success">{{ disp }}</td>
+                                <td class="text-center text-warning">{{ uso }}</td>
+                                <td class="text-center text-danger">{{ manut }}</td>
+                                <td style="min-width: 120px;">
+                                    {% if tot > 0 %}
+                                    <div class="progress" style="height: 6px;">
+                                        <div class="progress-bar bg-success"  style="width: {{ (disp/tot*100)|int }}%"></div>
+                                        <div class="progress-bar bg-warning"  style="width: {{ (uso/tot*100)|int }}%"></div>
+                                        <div class="progress-bar bg-danger"   style="width: {{ (manut/tot*100)|int }}%"></div>
+                                    </div>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+<script>
+(function () {
+    var badge   = document.getElementById('polling-badge');
+    var tsEl    = document.getElementById('polling-ts-dash');
+    var kpiMap  = {
+        total:       document.getElementById('kpi-total'),
+        disponiveis: document.getElementById('kpi-disponiveis'),
+        em_uso:      document.getElementById('kpi-em-uso'),
+        manutencao:  document.getElementById('kpi-manutencao'),
+    };
+
+    function fmtHora(d) {
+        return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+    }
+
+    function poll() {
+        fetch('/api/polling/snapshot')
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(data) {
+                if (!data) return;
+                if (kpiMap.total)       kpiMap.total.textContent       = data.total;
+                if (kpiMap.disponiveis) kpiMap.disponiveis.textContent = data.disponiveis;
+                if (kpiMap.em_uso)      kpiMap.em_uso.textContent      = data.em_uso;
+                if (kpiMap.manutencao)  kpiMap.manutencao.textContent  = data.manutencao;
+                tsEl.textContent = fmtHora(new Date());
+                badge.style.removeProperty('display');
+            })
+            .catch(function() {});
+    }
+
+    startPolling(poll, 60);
+})();
+</script>
+<script>const RECEBI_CONFIRMA = "{{ t('pendcomp.confirmar_recebimento') }}";</script>
+{% endblock %}

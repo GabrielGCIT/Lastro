@@ -1,0 +1,734 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Inventário{% endblock %}
+{% block content %}
+<div class="container-fluid fade-in">
+
+    {# ── Cabeçalho ── #}
+    <div class="page-header">
+        <div>
+            <h2 class="h3 text-dark fw-bold"><i class="fa-solid fa-list-check me-2"></i>{{ t('coletores.titulo') }}</h2>
+            <p class="text-muted small mb-0">{{ t('coletores.subtitulo') }}</p>
+        </div>
+        <button class="btn btn-mb-action shadow-sm fw-bold" onclick="abrirModalNovo()">
+            <i class="fa-solid fa-plus me-2"></i>{{ t('coletores.btn_novo') }}
+        </button>
+    </div>
+
+    {# ── H4: a dívida antes da lista ─────────────────────────────────────────
+       O inventário pode ter centenas de linhas; a marcação vermelha na linha só
+       cobra quem rolar até ela. Este banner diz o TAMANHO da dívida sem rolar, e
+       o botão leva direto ao recorte. #}
+    {% if pendencias_complemento %}
+    <div class="alert alert-danger d-flex align-items-center gap-3 mb-3 shadow-sm">
+        <i class="fa-solid fa-triangle-exclamation fa-2x"></i>
+        <div class="flex-fill">
+            <strong>{{ pendencias_complemento|length }}</strong> {{ t('pendcomp.banner') }}
+        </div>
+        {% if filtro_pendencia %}
+        <a href="{{ url_for('coletores.gerenciar_coletores', localidade=filtro_loc,
+                            status=filtro_status, alcance=filtro_alcance) }}"
+           class="btn btn-outline-danger btn-sm fw-bold">
+            {{ t('pendcomp.limpar_filtro') }}
+        </a>
+        {% else %}
+        <a href="{{ url_for('coletores.gerenciar_coletores', localidade=filtro_loc,
+                            status=filtro_status, alcance=filtro_alcance, pendencia=1) }}"
+           class="btn btn-danger btn-sm fw-bold">
+            <i class="fa-solid fa-filter me-1"></i>{{ t('pendcomp.filtrar') }}
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {# ── Barra de filtros ── #}
+    <form method="GET" action="{{ url_for('coletores.gerenciar_coletores') }}" class="card card-custom p-3 mb-3">
+        {% if filtro_pendencia %}<input type="hidden" name="pendencia" value="1">{% endif %}
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted text-uppercase">{{ t('label.localidade') }}</label>
+                <select name="localidade" class="form-select form-select-sm">
+                    <option value="">{{ t('label.todos') }}</option>
+                    {% for loc in localidades %}
+                    <option value="{{ loc.sigla }}" {{ 'selected' if filtro_loc == loc.sigla }}>
+                        {{ loc.sigla }} — {{ loc.nome }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted text-uppercase">{{ t('label.status') }}</label>
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">{{ t('label.todos') }}</option>
+                    {% for s in ['Disponível','Em Uso','Manutenção','Suspenso'] %}
+                    <option value="{{ s }}" {{ 'selected' if filtro_status == s }}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted text-uppercase">{{ t('coletores.col_alcance') }}</label>
+                <select name="alcance" class="form-select form-select-sm">
+                    <option value="">{{ t('label.todos') }}</option>
+                    <option value="CURTA" {{ 'selected' if filtro_alcance == 'CURTA' }}>{{ t('coletores.alcance_curta') }}</option>
+                    <option value="LONGA" {{ 'selected' if filtro_alcance == 'LONGA' }}>{{ t('coletores.alcance_longa') }}</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-dark btn-sm flex-fill">
+                    <i class="fa-solid fa-filter me-1"></i>{{ t('btn.filtrar') }}
+                </button>
+                {% if filtro_loc or filtro_status or filtro_alcance %}
+                <a href="{{ url_for('coletores.gerenciar_coletores') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="fa-solid fa-xmark"></i>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% if filtro_loc or filtro_status or filtro_alcance %}
+        <div class="mt-2">
+            <small class="text-muted">
+                {{ t('coletores.mostrando_ativos', n=coletores|length) }}
+                {% if filtro_loc %} · {{ t('label.localidade') }}: <strong>{{ filtro_loc }}</strong>{% endif %}
+                {% if filtro_status %} · {{ t('label.status') }}: <strong>{{ filtro_status }}</strong>{% endif %}
+                {% if filtro_alcance %} · {{ t('coletores.col_alcance') }}: <strong>{{ filtro_alcance }}</strong>{% endif %}
+            </small>
+        </div>
+        {% endif %}
+    </form>
+
+    {# ── Tabela ── #}
+    <div class="card card-custom border-0 shadow-sm">
+        {# ── U1: ações em lote ────────────────────────────────────────────
+           O formulário fica FORA da tabela e as caixas apontam para ele por
+           `form="formLote"`. Aninhar um <form> dentro de <table> é inválido e o
+           navegador o expulsa do lugar, quebrando a submissão de um jeito difícil
+           de enxergar. A barra só aparece com algo marcado — barra vazia é ruído
+           permanente para uma ação ocasional. #}
+        <form method="POST" id="formLote"
+              action="{{ url_for('coletores.mover_em_lote') }}"
+              class="alert alert-primary d-none align-items-center gap-3 mb-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="voltar" value="{{ request.full_path }}">
+            <span class="fw-bold"><span id="contaSelecao">0</span> {{ t('coletores.selecionados') }}</span>
+            <div class="d-flex align-items-center gap-2 flex-fill">
+                <label class="small fw-bold mb-0" for="locDestino">{{ t('coletores.mover_para') }}</label>
+                <select name="localidade_destino" id="locDestino"
+                        class="form-select form-select-sm" style="max-width: 260px;" required>
+                    <option value="">{{ t('complementos.selecione') }}</option>
+                    {% for loc in localidades %}
+                    <option value="{{ loc.id }}">{{ loc.sigla }} — {{ loc.nome }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-primary btn-sm fw-bold">
+                    <i class="fa-solid fa-truck-fast me-1"></i>{{ t('coletores.btn_mover') }}
+                </button>
+            </div>
+            <button type="button" class="btn btn-link btn-sm text-decoration-none"
+                    id="limparSelecao">{{ t('coletores.limpar_selecao') }}</button>
+        </form>
+
+        {# Controle de colunas: quem precisa do detalhe liga, e a escolha fica na
+           URL — dá para favoritar a visão preferida. #}
+        <div class="d-flex justify-content-end mb-2">
+            <a class="btn btn-sm btn-outline-secondary"
+               href="{{ url_for('coletores.gerenciar_coletores', localidade=filtro_loc,
+                                status=filtro_status, alcance=filtro_alcance,
+                                pendencia=filtro_pendencia or None,
+                                colunas=None if colunas_extras else 'tudo') }}">
+                <i class="fa-solid fa-table-columns me-1"></i>{{
+                    t('coletores.menos_colunas') if colunas_extras else t('coletores.mais_colunas') }}
+            </a>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light">
+                    <tr class="text-uppercase small text-muted">
+                        {# U1 — a coluna do LOCAL saiu: ela repetia a sigla que já vem
+                           no patrimônio ("GR 1001" + um selo "GR"). Alcance,
+                           diagnóstico e observação ficam atrás do controle de
+                           colunas: na operação típica vêm vazias e viram parede de
+                           traços, escondendo o que importa. #}
+                        <th style="width: 36px;" class="text-center">
+                            <input type="checkbox" class="form-check-input" id="marcarTodos"
+                                   title="{{ t('coletores.marcar_todos') }}">
+                        </th>
+                        <th style="width: 12%">{{ t('label.status') }}</th>
+                        <th style="width: 11%">{{ t('label.patrimonio') }}</th>
+                        <th style="width: 18%">{{ t('coletores.col_serial_lacre') }}</th>
+                        <th style="width: 10%">{{ t('coletores.col_camara') }}</th>
+                        {% if colunas_extras %}
+                        <th style="width: 8%">{{ t('coletores.col_alcance') }}</th>
+                        <th style="width: 17%">{{ t('coletores.col_diagnostico') }}</th>
+                        <th style="width: 14%">{{ t('coletores.col_observacao') }}</th>
+                        {% endif %}
+                        <th style="width: 15%" class="text-end">{{ t('coletores.col_acoes') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in coletores %}
+                    {% set pendencias = pendencias_complemento.get(c.id, []) %}
+                    {# H4 — a linha inteira fica marcada quando o coletor voltou
+                       devendo. Pendência discreta não cobra ninguém: quem varre o
+                       inventário precisa ENXERGAR a dívida sem procurar. #}
+                    {# B6 — desativado fica visível e apagado: sai de operação mas
+                       NÃO some da tela, senão ninguém consegue reativá-lo e o
+                       caminho óbvio vira recadastrar (a mesma lição da B3). #}
+                    <tr class="{{ 'table-danger' if pendencias else '' }}{{ ' opacity-50' if not c.esta_ativo else '' }}">
+                        <td class="text-center">
+                            <input type="checkbox" class="form-check-input js-marcar"
+                                   name="coletor_ids" value="{{ c.id }}" form="formLote">
+                        </td>
+                        <td>
+                            {# H5 — as duas dívidas não são a mesma coisa: o que voltou
+                               faltando é fato consumado; o que está em campo além do
+                               prazo ainda pode voltar. Selos diferentes porque a ação
+                               do gestor é diferente. #}
+                            {% if pendencias %}
+                            {% set faltou = pendencias | selectattr('situacao', 'equalto', 'FALTOU') | list %}
+                            <div class="mb-1">
+                                {% if faltou %}
+                                <span class="badge rounded-pill bg-danger px-2 py-1"
+                                      title="{{ t('pendcomp.title') }}">
+                                    <i class="fa-solid fa-triangle-exclamation me-1"></i>{{ t('pendcomp.badge') }}
+                                </span>
+                                {% endif %}
+                                {% if pendencias | length > faltou | length %}
+                                <span class="badge rounded-pill bg-danger px-2 py-1"
+                                      title="{{ t('pendcomp.title_atraso') }}">
+                                    <i class="fa-solid fa-clock me-1"></i>{{ t('pendcomp.atrasado') }}
+                                </span>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                            {% if not c.esta_ativo %}
+                            <span class="badge rounded-pill bg-dark px-2 py-1"
+                                  title="{{ c.desativado_motivo or '' }}">
+                                <i class="fa-solid fa-power-off me-1"></i>{{ t('desativar.selo')|upper }}
+                            </span>
+                            {% elif c.status == 'Disponível' %}
+                                <span class="badge rounded-pill bg-success px-2 py-1">DISPONÍVEL</span>
+                            {% elif c.status == 'Em Uso' %}
+                                <span class="badge rounded-pill bg-warning text-dark px-2 py-1">EM USO</span>
+                            {% elif c.status == 'Suspenso' %}
+                                <span class="badge rounded-pill bg-dark px-2 py-1"><i class="fa-solid fa-ban me-1"></i>SUSPENSO</span>
+                            {% else %}
+                                <span class="badge rounded-pill bg-danger px-2 py-1">MANUTENÇÃO</span>
+                            {% endif %}
+                            {# O detalhe importa tanto quanto o alerta: "faltando"
+                               sem dizer O QUE e COM QUEM obriga a abrir outra tela. #}
+                            {% if pendencias %}
+                            <div class="small text-danger mt-1 lh-sm">
+                                {% for p in pendencias %}
+                                <div>
+                                    <strong>{{ descrever_pendencia(p) }}</strong>
+                                    <span class="text-muted">
+                                        · {{ p.movimentacao.colaborador.nome if p.movimentacao.colaborador else 'RE ' ~ p.movimentacao.re_colaborador }}
+                                        {% if p.movimentacao.data_retorno %}
+                                        · {{ p.movimentacao.data_retorno.strftime('%d/%m %H:%M') }}
+                                        {% else %}
+                                        · {{ t('pendcomp.em_campo') }} {{ tempo_fora(p.horas_fora) }}
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td class="fw-bold font-monospace">
+                            {{ c.patrimonio_display }}
+                            {# Sem patrimônio, `patrimonio_display` devolve "—" e a
+                               localidade se perderia junto com a coluna que saiu. #}
+                            {% if c.patrimonio_display == '—' and c.localidade %}
+                            <span class="badge bg-secondary fw-normal">{{ c.localidade.sigla }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="fw-bold text-dark small">{{ c.serial_number }}</div>
+                            <small class="text-muted"><i class="fa-solid fa-tag me-1"></i>{{ c.numero_identificacao or '—' }}</small>
+                        </td>
+                        <td>
+                            {% if c.camara == 'SECO' %}
+                                <span class="badge bg-info text-dark" style="font-size: 0.7em;">{{ t('camara.seco') }}</span>
+                            {% elif c.camara == 'RESFRIADO' %}
+                                <span class="badge bg-success" style="font-size: 0.7em;">{{ t('camara.resfriado') }}</span>
+                            {% elif c.camara == 'CONGELADO' %}
+                                <span class="badge" style="background-color:#7c3aed;font-size:0.7em;">{{ t('camara.congelado') }}</span>
+                            {% else %}
+                                <span class="text-muted small">—</span>
+                            {% endif %}
+                        </td>
+                        {% if colunas_extras %}
+                        <td>
+                            {% if c.tipo_alcance %}
+                            <span class="badge bg-light text-dark border" style="font-size: 0.7em;">
+                                {{ t('coletores.alcance_curta') if c.tipo_alcance == 'CURTA' else t('coletores.alcance_longa') }}
+                            </span>
+                            {% else %}
+                            <span class="text-muted small">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if c.status in ['Manutenção', 'Suspenso'] and c.categoria_defeito %}
+                                <div class="d-flex flex-column">
+                                    <span class="badge bg-secondary mb-1 align-self-start" style="font-size: 0.7em;">{{ c.categoria_defeito }}</span>
+                                    <small class="fw-bold text-danger" style="font-size: 0.78rem;">
+                                        {% if c.categoria_defeito in mapa_diagnostico_i18n %}
+                                            {% for item in mapa_diagnostico_i18n[c.categoria_defeito] %}
+                                                {% if item[0] == c.detalhe_defeito %}{{ item[1] }} ({{ item[2] }}){% endif %}
+                                            {% endfor %}
+                                        {% endif %}
+                                    </small>
+                                </div>
+                            {% else %}
+                                <span class="text-muted small">—</span>
+                            {% endif %}
+                        </td>
+                        <td><small class="text-muted fst-italic">{{ c.descricao_problema or '' }}</small></td>
+                        {% endif %}
+                        <td class="text-end">
+                            {# U1 — ícone mudo não se lê. Dois botões cinza idênticos, um
+                               com "i" e outro com um cadeado, obrigavam a passar o mouse
+                               para descobrir o que faziam. Agora dizem. #}
+                            <a href="{{ url_for('dashboard.historico_coletor', coletor_id=c.id) }}"
+                               class="btn btn-sm btn-outline-secondary me-1">
+                                <i class="fa-solid fa-clock-rotate-left me-1"></i>{{ t('coletores.btn_historico') }}
+                            </a>
+                            {% if not c.esta_ativo %}
+                            {# Desativado: a única ação é trazer de volta. Editar um
+                               coletor fora de operação seria mexer no que já saiu
+                               de cena. #}
+                            <form method="POST" class="d-inline"
+                                  action="{{ url_for('coletores.voltar_operacao_coletor', coletor_id=c.id) }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="voltar" value="{{ request.full_path }}">
+                                <button class="btn btn-sm btn-outline-success" type="submit">
+                                    <i class="fa-solid fa-rotate-left me-1"></i>{{ t('desativar.btn_voltar') }}
+                                </button>
+                            </form>
+                            {% else %}
+                            <button class="btn btn-sm btn-outline-secondary me-1"
+                                    onclick="abrirDesativar({{ c.id }}, '{{ c.rotulo }}')"
+                                    title="{{ t('desativar.btn') }}">
+                                <i class="fa-solid fa-power-off"></i>
+                            </button>
+                            {# EXCLUIR só aparece no que nunca foi usado. Oferecer e
+                               recusar depois é o padrão que ensina a ignorar aviso —
+                               e `com_historico` vem pronto da rota, em lote. #}
+                            {% if c.id not in com_historico %}
+                            <button class="btn btn-sm btn-outline-danger me-1"
+                                    onclick="abrirExcluir({{ c.id }}, '{{ c.rotulo }}')"
+                                    title="{{ t('desativar.btn_excluir') }}">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                            {% endif %}
+                            <button class="btn btn-sm btn-outline-primary"
+                                    data-id="{{ c.id }}"
+                                    data-serial="{{ c.serial_number }}"
+                                    data-identificacao="{{ c.numero_identificacao or '' }}"
+                                    data-status="{{ c.status }}"
+                                    data-cat="{{ c.categoria_defeito or '' }}"
+                                    data-det="{{ c.detalhe_defeito or '' }}"
+                                    data-desc="{{ c.descricao_problema or '' }}"
+                                    data-patrimonio="{{ c.numero_patrimonio or '' }}"
+                                    data-localidade="{{ c.localidade_id or '' }}"
+                                    data-alcance="{{ c.tipo_alcance or '' }}"
+                                    data-camara="{{ c.camara or '' }}"
+                                    data-modelo="{{ c.modelo or '' }}"
+                                    data-tem-garantia="{{ 'true' if c.tem_garantia else 'false' }}"
+                                    data-validade-garantia="{{ c.validade_garantia.isoformat() if c.validade_garantia else '' }}"
+                                    onclick="editarColetor(this)"
+                                    title="{{ t('btn.editar') }}">
+                                <i class="fa-solid fa-pen-to-square me-1"></i>{{ t('btn.editar') }}
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not coletores %}
+                    {# 🔴 Base vazia e filtro sem resultado são coisas diferentes, e a
+                       mesma frase para as duas manda o operador procurar um filtro
+                       que não existe — logo na tela que ele abre primeiro, no dia em
+                       que o sistema ainda não tem nada. Mesmo defeito do traço mudo
+                       da B2: uma frase para duas realidades. #}
+                    {% set tem_filtro = filtro_loc or filtro_status or filtro_alcance or filtro_pendencia %}
+                    <tr><td colspan="8" class="text-center py-4">
+                        {% if sem_alcance %}
+                        <div class="text-muted">{{ t('msg.sem_alcance') }}</div>
+                        <div class="small text-muted mt-1">{{ t('msg.sem_alcance_dica') }}</div>
+                        {% elif tem_filtro %}
+                        <div class="text-muted">{{ t('coletores.sem_resultado') }}</div>
+                        <a class="small text-primary text-decoration-none"
+                           href="{{ url_for('coletores.gerenciar_coletores') }}">
+                            {{ t('msg.limpar_filtros') }}
+                        </a>
+                        {% else %}
+                        <div class="text-muted">{{ t('coletores.sem_dados') }}</div>
+                        <div class="small text-primary mt-1">{{ t('coletores.sem_dados_dica') }}</div>
+                        {% endif %}
+                    </td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{# ── Modal de Cadastro / Edição ── #}
+<div class="modal fade" id="modalColetor" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0">
+            <div class="modal-header" style="background-color: #0f172a; color: white;">
+                <h5 class="modal-title fw-bold"><i class="fa-solid fa-microchip me-2"></i>{{ t('coletores.modal_titulo') }}</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('coletores.gerenciar_coletores', localidade=filtro_loc, status=filtro_status, alcance=filtro_alcance) }}" method="POST">
+                <div class="modal-body bg-light">
+                    <input type="hidden" name="id" id="coletor_id">
+
+                    {# ── Bloco: Identificação ── #}
+                    <div class="card mb-3 shadow-sm border-0">
+                        <div class="card-body">
+                            <h6 class="card-subtitle mb-3 text-muted border-bottom pb-2 text-uppercase font-monospace" style="font-size: 0.75rem;">{{ t('coletores.bloco_identificacao') }}</h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small">{{ t('coletores.label_serial') }}</label>
+                                    <input type="text" class="form-control font-monospace" name="serial_number" id="serial_number"
+                                           required placeholder="Ex: 111666..."
+                                           oninput="this.value = this.value.toUpperCase()">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small">{{ t('coletores.label_numero_lacre') }}</label>
+                                    <input type="text" class="form-control font-monospace" name="numero_identificacao" id="numero_identificacao" placeholder="Ex: 000001">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small">{{ t('coletores.label_modelo') }}</label>
+                                    <input type="text" class="form-control font-monospace" name="modelo" id="coletor_modelo"
+                                           placeholder="Ex: MC9190G"
+                                           oninput="this.value = this.value.toUpperCase()">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold small">{{ t('label.patrimonio') }}</label>
+                                    <input type="text" class="form-control font-monospace" name="numero_patrimonio" id="num_patrimonio"
+                                           placeholder="Ex: 253">
+                                    <div class="form-text">{{ t('coletores.label_sigla_hint') }}</div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold small">{{ t('label.localidade') }}</label>
+                                    <select class="form-select" name="localidade_id" id="localidade_id_select" required>
+                                        <option value="">{{ t('msg.selecione') }}</option>
+                                        {% for loc in localidades %}
+                                        <option value="{{ loc.id }}">{{ loc.sigla }} — {{ loc.nome }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold small">{{ t('coletores.label_tipo_alcance') }}</label>
+                                    <select class="form-select" name="tipo_alcance" id="tipo_alcance_select">
+                                        <option value="">{{ t('label.nao_definido') }}</option>
+                                        <option value="CURTA">{{ t('coletores.alcance_curta') }}</option>
+                                        <option value="LONGA">{{ t('coletores.alcance_longa') }}</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold small">{{ t('label.camara') }}</label>
+                                    <select class="form-select" name="camara" id="camara_select">
+                                        <option value="">{{ t('label.nao_definido') }}</option>
+                                        <option value="SECO">{{ t('camara.seco') }}</option>
+                                        <option value="RESFRIADO">{{ t('camara.resfriado') }}</option>
+                                        <option value="CONGELADO">{{ t('camara.congelado') }}</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# ── Bloco: Garantia ── #}
+                    <div class="card mb-3 shadow-sm border-0">
+                        <div class="card-body">
+                            <h6 class="card-subtitle mb-3 text-muted border-bottom pb-2 text-uppercase font-monospace" style="font-size: 0.75rem;">{{ t('coletores.bloco_garantia') }}</h6>
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-4">
+                                    <div class="form-check mt-2">
+                                        <input type="checkbox" name="tem_garantia" id="tem_garantia" class="form-check-input" onchange="toggleValidadeGarantia()">
+                                        <label class="form-check-label fw-bold" for="tem_garantia">{{ t('coletores.label_tem_garantia') }}</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4" id="campo_validade_garantia" style="display:none">
+                                    <label class="form-label fw-bold small">{{ t('coletores.label_valida_ate') }}</label>
+                                    <input type="date" class="form-control" name="validade_garantia" id="validade_garantia">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# ── Bloco: Situação ── #}
+                    <div class="card shadow-sm border-0">
+                        <div class="card-body">
+                            <h6 class="card-subtitle mb-3 text-muted border-bottom pb-2 text-uppercase font-monospace" style="font-size: 0.75rem;">{{ t('coletores.bloco_situacao') }}</h6>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">{{ t('coletores.label_status_op') }}</label>
+                                <select class="form-select form-select-lg fw-bold" name="status" id="status_select" onchange="toggleDiagnostico()">
+                                    <option value="Disponível">{{ t('coletores.status.disponivel_op') }}</option>
+                                    <option value="Manutenção">{{ t('coletores.status.manutencao_op') }}</option>
+                                    <option value="Suspenso">{{ t('coletores.status.suspenso_op') }}</option>
+                                </select>
+                            </div>
+
+                            <div id="area_diagnostico" class="d-none bg-white p-3 rounded border border-danger">
+                                <p class="text-danger small fw-bold mb-3"><i class="fa-solid fa-triangle-exclamation me-1"></i>{{ t('coletores.label_diagnostico_tecnico') }}</p>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label small">{{ t('coletores.label_familia_prob') }}</label>
+                                        <select class="form-select" name="categoria_defeito" id="cat_defeito" onchange="carregarDetalhes()">
+                                            <option value="">Selecione...</option>
+                                            <option value="FISICO">{{ t('coletores.defeito.fisico') }}</option>
+                                            <option value="HARDWARE">{{ t('coletores.defeito.hardware') }}</option>
+                                            <option value="SISTEMA">{{ t('coletores.defeito.sistema') }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small">{{ t('coletores.label_detalhe_tecnico') }}</label>
+                                        <select class="form-select" name="detalhe_defeito" id="detalhe_defeito">
+                                            <option value="">{{ t('coletores.selecione_familia') }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label small">{{ t('coletores.label_obs_extra') }}</label>
+                                        <textarea class="form-control" name="descricao_problema" id="desc_problema" rows="2" placeholder="Descreva brevemente o ocorrido..."></textarea>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="aviso_suspensao" class="d-none alert alert-dark mt-3 mb-0 py-2 small">
+                                <i class="fa-solid fa-lock me-2"></i>{{ t('coletores.aviso_suspenso') }}
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">{{ t('btn.cancelar') }}</button>
+                    <button type="submit" class="btn btn-mb-action fw-bold px-4">{{ t('coletores.btn_salvar') }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script id="dados-diagnostico" type="application/json">{{ mapa_diagnostico_i18n | tojson }}</script>
+
+<script>
+    var mapaDiagnostico = {};
+    try {
+        mapaDiagnostico = JSON.parse(document.getElementById('dados-diagnostico').textContent);
+    } catch(e) { console.error('Erro mapa diagnóstico:', e); }
+
+    function abrirModalNovo() {
+        document.getElementById('coletor_id').value            = '';
+        document.getElementById('serial_number').value         = '';
+        document.getElementById('numero_identificacao').value   = '';
+        document.getElementById('coletor_modelo').value        = 'MC9190G';
+        document.getElementById('num_patrimonio').value        = '';
+        document.getElementById('localidade_id_select').value  = '';
+        document.getElementById('tipo_alcance_select').value   = '';
+        document.getElementById('camara_select').value         = '';
+        document.getElementById('status_select').value         = 'Disponível';
+        document.getElementById('desc_problema').value         = '';
+        document.getElementById('tem_garantia').checked        = false;
+        document.getElementById('validade_garantia').value     = '';
+        toggleValidadeGarantia();
+        toggleDiagnostico();
+        new bootstrap.Modal(document.getElementById('modalColetor')).show();
+    }
+
+    function editarColetor(btn) {
+        document.getElementById('coletor_id').value            = btn.dataset.id;
+        document.getElementById('serial_number').value         = btn.dataset.serial;
+        document.getElementById('numero_identificacao').value   = btn.dataset.identificacao;
+        document.getElementById('coletor_modelo').value        = btn.dataset.modelo || 'MC9190G';
+        document.getElementById('num_patrimonio').value        = btn.dataset.patrimonio;
+        document.getElementById('localidade_id_select').value  = btn.dataset.localidade;
+        document.getElementById('tipo_alcance_select').value   = btn.dataset.alcance;
+        document.getElementById('camara_select').value         = btn.dataset.camara || '';
+        document.getElementById('status_select').value         = btn.dataset.status;
+        toggleDiagnostico();
+
+        if (btn.dataset.status === 'Manutenção') {
+            document.getElementById('cat_defeito').value = btn.dataset.cat;
+            carregarDetalhes();
+            setTimeout(() => {
+                if (btn.dataset.det) document.getElementById('detalhe_defeito').value = btn.dataset.det;
+            }, 50);
+            const d = btn.dataset.desc;
+            document.getElementById('desc_problema').value = (d && d !== 'None') ? d : '';
+        }
+
+        const temGarantia = btn.dataset.temGarantia === 'true';
+        document.getElementById('tem_garantia').checked    = temGarantia;
+        document.getElementById('validade_garantia').value = btn.dataset.validadeGarantia || '';
+        toggleValidadeGarantia();
+
+        new bootstrap.Modal(document.getElementById('modalColetor')).show();
+    }
+
+    function toggleValidadeGarantia() {
+        const checked = document.getElementById('tem_garantia').checked;
+        document.getElementById('campo_validade_garantia').style.display = checked ? 'block' : 'none';
+        if (!checked) document.getElementById('validade_garantia').value = '';
+    }
+
+    function toggleDiagnostico() {
+        const status   = document.getElementById('status_select').value;
+        const areaDiag = document.getElementById('area_diagnostico');
+        const avisoSusp = document.getElementById('aviso_suspensao');
+        areaDiag.classList.add('d-none');
+        avisoSusp.classList.add('d-none');
+        if (status === 'Manutenção') {
+            areaDiag.classList.remove('d-none');
+        } else if (status === 'Suspenso') {
+            avisoSusp.classList.remove('d-none');
+        }
+    }
+
+    function carregarDetalhes() {
+        const cat    = document.getElementById('cat_defeito').value;
+        const select = document.getElementById('detalhe_defeito');
+        select.innerHTML = '<option value="">{{ t('coletores.selecione_defeito') }}</option>';
+        if (cat && mapaDiagnostico[cat]) {
+            mapaDiagnostico[cat].forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = item[0];
+                opt.text  = `${item[1]} [${item[2]}]`;
+                select.add(opt);
+            });
+        }
+    }
+</script>
+
+<script>
+// U1 — a barra de ações só existe quando há seleção, e o contador é a única
+// confirmação de que a marcação pegou. Sem ele, "mover 12" vira ato de fé.
+(function () {
+    var barra   = document.getElementById('formLote');
+    var conta   = document.getElementById('contaSelecao');
+    var todos   = document.getElementById('marcarTodos');
+    var limpar  = document.getElementById('limparSelecao');
+    var caixas  = function () { return document.querySelectorAll('.js-marcar'); };
+
+    function atualizar() {
+        var n = document.querySelectorAll('.js-marcar:checked').length;
+        conta.textContent = n;
+        barra.classList.toggle('d-none', n === 0);
+        barra.classList.toggle('d-flex', n > 0);
+        // "marcar todos" reflete o estado real: meio marcado vira indeterminado,
+        // em vez de mentir que está tudo ou nada selecionado.
+        if (todos) {
+            todos.checked = n > 0 && n === caixas().length;
+            todos.indeterminate = n > 0 && n < caixas().length;
+        }
+    }
+
+    caixas().forEach(function (c) { c.addEventListener('change', atualizar); });
+    if (todos) {
+        todos.addEventListener('change', function () {
+            caixas().forEach(function (c) { c.checked = todos.checked; });
+            atualizar();
+        });
+    }
+    if (limpar) {
+        limpar.addEventListener('click', function () {
+            caixas().forEach(function (c) { c.checked = false; });
+            atualizar();
+        });
+    }
+    atualizar();
+})();
+</script>
+
+{# ── B6: desativar e excluir ─────────────────────────────────────────────────
+   Um modal só para a lista inteira, com o alvo injetado ao abrir: um par de
+   modais por linha faria a página carregar centenas deles. #}
+<div class="modal fade" id="modalDesativarColetor" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST" id="formDesativarColetor" class="modal-content">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="voltar" value="{{ request.full_path }}">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold">
+            {{ t('desativar.titulo') }} <span class="font-monospace" id="alvoDesativar"></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small">{{ t('desativar.explica') }}</p>
+        <label class="form-label fw-bold small" for="motivoDesativarColetor">
+            {{ t('desativar.label_motivo') }}
+        </label>
+        <input type="text" name="motivo" id="motivoDesativarColetor" class="form-control"
+               maxlength="200" required placeholder="{{ t('desativar.ph_motivo') }}">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+            {{ t('btn.cancelar') }}
+        </button>
+        <button type="submit" class="btn btn-dark fw-bold">{{ t('desativar.btn') }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal fade" id="modalExcluirColetor" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST" id="formExcluirColetor" class="modal-content">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="voltar" value="{{ request.full_path }}">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title fw-bold">
+            {{ t('desativar.excluir_titulo') }}
+            <span class="font-monospace" id="alvoExcluir"></span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-danger small mb-3">{{ t('desativar.excluir_aviso') }}</div>
+        <label class="form-label fw-bold small" for="senhaExcluirColetor">
+            {{ t('desativar.label_senha') }}
+        </label>
+        <input type="password" name="senha" id="senhaExcluirColetor" class="form-control"
+               autocomplete="current-password" required>
+        <div class="form-text">{{ t('desativar.ajuda_senha') }}</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+            {{ t('btn.cancelar') }}
+        </button>
+        <button type="submit" class="btn btn-danger fw-bold">{{ t('desativar.btn_excluir') }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+// Os modais são um par só para a lista inteira; quem muda é o alvo. As funções
+// montam o action da rota daquele coletor no momento do clique — um par por
+// linha faria a página carregar centenas deles.
+function abrirDesativar(id, etiqueta) {
+    var form = document.getElementById('formDesativarColetor');
+    form.action = '/coletores/' + id + '/desativar';
+    document.getElementById('alvoDesativar').textContent = etiqueta || '';
+    document.getElementById('motivoDesativarColetor').value = '';
+    new bootstrap.Modal(document.getElementById('modalDesativarColetor')).show();
+}
+
+function abrirExcluir(id, etiqueta) {
+    var form = document.getElementById('formExcluirColetor');
+    form.action = '/coletores/' + id + '/excluir';
+    document.getElementById('alvoExcluir').textContent = etiqueta || '';
+    document.getElementById('senhaExcluirColetor').value = '';
+    new bootstrap.Modal(document.getElementById('modalExcluirColetor')).show();
+}
+</script>
+{% endblock %}

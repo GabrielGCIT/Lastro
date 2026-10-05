@@ -1,0 +1,295 @@
+{% extends "base_hub.html" %}
+
+{% block title %}{{ t('colaboradores.titulo') }}{% endblock %}
+{% block content %}
+<div class="container-fluid fade-in">
+
+    {# ── Cabeçalho ── #}
+    <div class="page-header">
+        <div>
+            <h2 class="h3 text-dark fw-bold"><i class="fa-solid fa-people-group me-2"></i>{{ t('colaboradores.titulo') }}</h2>
+            <p class="text-muted small mb-0">{{ t('colaboradores.subtitulo') }}</p>
+        </div>
+        <button class="btn btn-mb-action shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#modalNovoColab">
+            <i class="fa-solid fa-plus me-2"></i>{{ t('colaboradores.btn_novo') }}
+        </button>
+    </div>
+
+    {# ── Filtros ── #}
+    <div class="card card-custom mb-3">
+        <div class="card-body py-2">
+            <form method="GET" class="d-flex gap-2 flex-wrap align-items-end">
+                <div>
+                    <label class="form-label small fw-semibold mb-1">{{ t('label.buscar') }}</label>
+                    <input type="text" name="q" class="form-control form-control-sm"
+                           placeholder="{{ t('colaboradores.placeholder_busca') }}"
+                           value="{{ filtro_q }}">
+                </div>
+                <div>
+                    <label class="form-label small fw-semibold mb-1">{{ t('label.status') }}</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="ativo"   {% if filtro_status == 'ativo'   %}selected{% endif %}>{{ t('label.ativo') }}</option>
+                        <option value="inativo" {% if filtro_status == 'inativo' %}selected{% endif %}>{{ t('label.inativo') }}</option>
+                        <option value="todos"   {% if filtro_status == 'todos'   %}selected{% endif %}>{{ t('label.todos') }}</option>
+                    </select>
+                </div>
+                <div class="d-flex gap-2 align-items-end">
+                    <button type="submit" class="btn btn-sm btn-primary">
+                        <i class="fa-solid fa-magnifying-glass me-1"></i>{{ t('btn.filtrar') }}
+                    </button>
+                    <a href="{{ url_for('colaboradores.lista') }}" class="btn btn-sm btn-outline-secondary">{{ t('btn.limpar') }}</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {# ── Tabela ── #}
+    <div class="card card-custom">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>RE</th>
+                        <th>{{ t('label.nome') }}</th>
+                        <th>{{ t('colaboradores.col_cargo') }}</th>
+                        <th>{{ t('colaboradores.col_departamento') }}</th>
+                        <th class="text-center">{{ t('colaboradores.col_camara') }}</th>
+                        <th class="text-center">{{ t('colaboradores.col_turno') }}</th>
+                        <th class="text-center">{{ t('label.status') }}</th>
+                        <th class="text-center">{{ t('label.acao') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in colaboradores %}
+                    <tr class="{{ '' if c.ativo else 'opacity-50' }}">
+                        <td class="font-monospace fw-bold small">{{ c.re }}</td>
+                        <td class="fw-semibold">{{ c.nome }}</td>
+                        <td class="text-muted small">{{ c.cargo or '—' }}</td>
+                        <td class="text-muted small">{{ c.departamento or '—' }}</td>
+                        <td class="text-center">
+                            {% if c.administrativo %}
+                            <span class="badge bg-light text-secondary border">Admin.</span>
+                            {% elif c.camara %}
+                            <span class="badge bg-info text-white">{{ c.camara }}</span>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if c.administrativo %}
+                            <span class="text-muted">—</span>
+                            {% elif c.turno %}
+                            <span class="badge bg-secondary">{{ c.turno }}</span>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if c.ativo %}
+                            <span class="badge bg-success">{{ t('label.ativo') }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ t('label.inativo') }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <div class="d-flex gap-1 justify-content-center">
+                                <button class="btn btn-sm btn-outline-primary"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#modalEditarColab{{ c.id }}">
+                                    <i class="fa-solid fa-pen"></i>
+                                </button>
+                                <form action="{{ url_for('colaboradores.toggle_ativo', colab_id=c.id) }}" method="POST" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm {{ 'btn-outline-danger' if c.ativo else 'btn-outline-success' }}"
+                                            title="{{ t('label.desativar') if c.ativo else t('label.reativar') }}">
+                                        <i class="fa-solid {{ 'fa-ban' if c.ativo else 'fa-rotate-left' }}"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+
+                    {% endfor %}
+
+                    {% if not colaboradores %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            <i class="fa-solid fa-people-group fa-2x mb-2 d-block opacity-25"></i>
+                            {{ t('colaboradores.vazio') }}
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+
+{# ── Modal Novo Colaborador ── #}
+<div class="modal fade" id="modalNovoColab" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="{{ url_for('colaboradores.novo') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fa-solid fa-plus me-2"></i>{{ t('colaboradores.modal_novo') }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">RE <span class="text-danger">*</span></label>
+                            <input type="text" name="re" class="form-control font-monospace text-uppercase" required maxlength="20" placeholder="00000">
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label fw-semibold">{{ t('label.nome') }} <span class="text-danger">*</span></label>
+                            <input type="text" name="nome" class="form-control" required maxlength="100" placeholder="{{ t('colaboradores.placeholder_nome') }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">{{ t('colaboradores.col_cargo') }}</label>
+                            <input type="text" name="cargo" class="form-control" maxlength="50" placeholder="{{ t('colaboradores.placeholder_cargo') }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">{{ t('colaboradores.col_departamento') }}</label>
+                            <input type="text" name="departamento" class="form-control" maxlength="50" placeholder="{{ t('colaboradores.placeholder_departamento') }}">
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input administrativo-check-novo" type="checkbox" name="administrativo" value="1" id="adminNovo">
+                                <label class="form-check-label" for="adminNovo">
+                                    <strong>{{ t('colaboradores.label_administrativo') }}</strong>
+                                    <span class="text-muted small d-block">{{ t('colaboradores.hint_administrativo') }}</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6 campos-operacao-novo">
+                            <label class="form-label fw-semibold">{{ t('colaboradores.col_camara') }}</label>
+                            <select name="camara" class="form-select">
+                                <option value="">—</option>
+                                {% for cam in camara_choices %}
+                                <option value="{{ cam }}">{{ cam }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 campos-operacao-novo">
+                            <label class="form-label fw-semibold">{{ t('colaboradores.col_turno') }}</label>
+                            <select name="turno" class="form-select">
+                                <option value="">—</option>
+                                {% for t_ in turno_choices %}
+                                <option value="{{ t_ }}">{{ t_ }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('btn.cancelar') }}</button>
+                    <button type="submit" class="btn btn-mb-action fw-bold">
+                        <i class="fa-solid fa-plus me-1"></i>{{ t('colaboradores.btn_novo') }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# Modais de edição inline (já estão no loop acima sem include) — evita include parcial #}
+{% for c in colaboradores %}
+<div class="modal fade" id="modalEditarColab{{ c.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="{{ url_for('colaboradores.editar', colab_id=c.id) }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fa-solid fa-pen me-2"></i>{{ t('colaboradores.modal_editar') }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">RE <span class="text-danger">*</span></label>
+                            <input type="text" name="re" class="form-control font-monospace text-uppercase" required maxlength="20" value="{{ c.re }}">
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label fw-semibold">{{ t('label.nome') }} <span class="text-danger">*</span></label>
+                            <input type="text" name="nome" class="form-control" required maxlength="100" value="{{ c.nome }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">{{ t('colaboradores.col_cargo') }}</label>
+                            <input type="text" name="cargo" class="form-control" maxlength="50" value="{{ c.cargo or '' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">{{ t('colaboradores.col_departamento') }}</label>
+                            <input type="text" name="departamento" class="form-control" maxlength="50" value="{{ c.departamento or '' }}">
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input administrativo-check-{{ c.id }}" type="checkbox" name="administrativo" value="1" id="adminEdit{{ c.id }}" {{ 'checked' if c.administrativo }}>
+                                <label class="form-check-label" for="adminEdit{{ c.id }}">
+                                    <strong>{{ t('colaboradores.label_administrativo') }}</strong>
+                                    <span class="text-muted small d-block">{{ t('colaboradores.hint_administrativo') }}</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6 campos-operacao-{{ c.id }}">
+                            <label class="form-label fw-semibold">{{ t('colaboradores.col_camara') }}</label>
+                            <select name="camara" class="form-select">
+                                <option value="">—</option>
+                                {% for cam in camara_choices %}
+                                <option value="{{ cam }}" {{ 'selected' if c.camara == cam }}>{{ cam }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 campos-operacao-{{ c.id }}">
+                            <label class="form-label fw-semibold">{{ t('colaboradores.col_turno') }}</label>
+                            <select name="turno" class="form-select">
+                                <option value="">—</option>
+                                {% for t_ in turno_choices %}
+                                <option value="{{ t_ }}" {{ 'selected' if c.turno == t_ }}>{{ t_ }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('btn.cancelar') }}</button>
+                    <button type="submit" class="btn btn-mb-action fw-bold">
+                        <i class="fa-solid fa-floppy-disk me-1"></i>{{ t('btn.salvar') }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<script>
+/* Toggle câmara/turno baseado no checkbox Administrativo — novo e edições */
+(function () {
+    function setupAdminToggle(checkboxSelector, operacaoSelector) {
+        const check = document.querySelector(checkboxSelector);
+        const campos = document.querySelectorAll(operacaoSelector);
+        if (!check) return;
+
+        function toggle() {
+            campos.forEach(el => {
+                el.style.opacity   = check.checked ? '.4' : '1';
+                el.style.pointerEvents = check.checked ? 'none' : 'auto';
+                el.querySelectorAll('select').forEach(s => { if (check.checked) s.value = ''; });
+            });
+        }
+        check.addEventListener('change', toggle);
+        toggle();
+    }
+
+    /* Novo */
+    setupAdminToggle('.administrativo-check-novo', '.campos-operacao-novo');
+
+    /* Edições */
+    {% for c in colaboradores %}
+    setupAdminToggle('.administrativo-check-{{ c.id }}', '.campos-operacao-{{ c.id }}');
+    {% endfor %}
+}());
+</script>
+{% endblock %}

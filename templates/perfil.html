@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+
+{% block title %}Meu Perfil{% endblock %}
+{% block content %}
+<style>
+    /* Swatches da paleta de acento — o .btn-check (radio) fica oculto e o label
+       colorido vira o alvo clicável. O tick só aparece no selecionado. */
+    .acento-swatch {
+        width: 30px; height: 30px; border-radius: 50%;
+        display: inline-flex; align-items: center; justify-content: center;
+        cursor: pointer; color: #fff; font-size: 0.68rem;
+        box-shadow: 0 0 0 1px var(--border-color);
+        transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+    .acento-swatch i { opacity: 0; transition: opacity 0.1s ease; }
+    .acento-swatch:hover { transform: scale(1.08); }
+    .btn-check:checked + .acento-swatch {
+        box-shadow: 0 0 0 2px var(--surface-0), 0 0 0 4px var(--text-primary);
+    }
+    .btn-check:checked + .acento-swatch i { opacity: 1; }
+    .btn-check:focus-visible + .acento-swatch {
+        box-shadow: 0 0 0 2px var(--surface-0), 0 0 0 4px var(--accent);
+    }
+</style>
+<div class="container-fluid fade-in">
+
+    {# ── Cabeçalho ── #}
+    <div class="mb-4">
+        <h2 class="h3 fw-bold text-dark"><i class="fa-solid fa-circle-user me-2"></i>{{ t('perfil.titulo') }}</h2>
+        <p class="text-muted small mb-0">{{ t('perfil.subtitulo') }}</p>
+    </div>
+
+    <div class="row g-4">
+
+        {# ══════════ COLUNA ESQUERDA — Identidade (read-only) ══════════ #}
+        <div class="col-lg-4">
+
+            {# Card de identidade #}
+            <div class="card card-custom mb-4">
+                <div class="card-body text-center py-4">
+
+                    {# Avatar / Foto #}
+                    {% if user.foto_perfil %}
+                    <div class="position-relative d-inline-block mb-3">
+                        <img src="{{ url_for('dashboard.foto_perfil_file', filename=user.foto_perfil) }}"
+                             alt="Foto de perfil"
+                             class="rounded-circle border"
+                             style="width: 90px; height: 90px; object-fit: cover; border-width: 3px !important; border-color: var(--accent) !important;">
+                    </div>
+                    {% else %}
+                    {% set parts = user.nome.split() %}
+                    {% set iniciais = (parts[0][0] + (parts[1][0] if parts|length > 1 else ''))|upper %}
+                    <div class="mx-auto mb-3 d-flex align-items-center justify-content-center rounded-circle fw-bold"
+                         style="width: 90px; height: 90px; background-color: var(--accent); color: var(--accent-contrast); font-size: 1.6rem;">
+                        {{ iniciais }}
+                    </div>
+                    {% endif %}
+
+                    <h5 class="fw-bold mb-0">{{ user.nome }}</h5>
+                    {% set _grupo_nome = user.grupo.nome if user.grupo else '' %}
+                    {% set _gc = {
+                        'TI_MASTER':   'bg-dark',
+                        'TI':          'bg-dark',
+                        'DIRETOR':     'bg-danger',
+                        'GERENTE':     'bg-primary',
+                        'SUPERVISOR':  'bg-info text-dark',
+                        'COORDENADOR': 'bg-info text-dark',
+                        'ANALISTA':    'bg-secondary',
+                        'ESPECIALISTA':'bg-warning text-dark',
+                        'TECNICO':     'bg-warning text-dark',
+                        'LIDER':       'bg-success',
+                        'OPERADOR':    'bg-secondary',
+                        'CONSULTA':    'bg-light text-dark border',
+                        'AUDITOR':     'bg-danger',
+                    } %}
+                    <span class="badge mt-2 {{ _gc.get(_grupo_nome, 'bg-secondary') }}">
+                        {{ _grupo_nome.replace('_', ' ') if _grupo_nome else t('usuarios.sem_grupo') }}
+                    </span>
+                </div>
+            </div>
+
+            {# Card de dados fixos #}
+            <div class="card card-custom">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h6 class="fw-bold mb-0">
+                        <i class="fa-solid fa-lock me-2 text-muted"></i>{{ t('perfil.identidade_titulo') }}
+                    </h6>
+                    <small class="text-muted">{{ t('perfil.identidade_sub') }}</small>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between align-items-center py-3">
+                            <div>
+                                <small class="text-muted d-block" style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;">{{ t('label.nome_completo') }}</small>
+                                <span class="fw-bold small">{{ user.nome }}</span>
+                            </div>
+                            <i class="fa-solid fa-user text-muted opacity-50"></i>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center py-3">
+                            <div>
+                                <small class="text-muted d-block" style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;">R.E.</small>
+                                <span class="fw-bold small font-monospace">{{ user.re }}</span>
+                            </div>
+                            <i class="fa-solid fa-id-card text-muted opacity-50"></i>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center py-3">
+                            <div>
+                                <small class="text-muted d-block" style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;">{{ t('perfil.label_perfil_acesso') }}</small>
+                                <span class="fw-bold small">{{ user.grupo.nome.replace('_', ' ') if user.grupo else '—' }}</span>
+                            </div>
+                            <i class="fa-solid fa-shield-halved text-muted opacity-50"></i>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+        </div>
+
+        {# ══════════ COLUNA DIREITA — Formulários editáveis ══════════ #}
+        <div class="col-lg-8 d-flex flex-column gap-4">
+
+            {# ── Aparência (tema + cor de acento) ── #}
+            <div class="card card-custom">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h6 class="fw-bold mb-0"><i class="fa-solid fa-palette me-2" style="color: var(--accent-fg);"></i>{{ t('perfil.aparencia_titulo') }}</h6>
+                    <small class="text-muted">{{ t('perfil.hint_aparencia') }}</small>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('dashboard.perfil') }}" method="POST" data-no-loading>
+                        <input type="hidden" name="acao" value="preferencias">
+
+                        {# Tema — segmented control com radios #}
+                        <label class="form-label fw-bold small d-block">{{ t('perfil.tema_label') }}</label>
+                        {% set _tema_atual = user.tema or 'light' %}
+                        <div class="btn-group mb-4" role="group" aria-label="{{ t('perfil.tema_label') }}">
+                            {% for val, ic, lbl in [
+                                ('light', 'fa-sun',              t('tema.light')),
+                                ('dark',  'fa-moon',             t('tema.dark')),
+                                ('auto',  'fa-circle-half-stroke', t('tema.auto'))
+                            ] %}
+                            <input type="radio" class="btn-check" name="tema" id="tema-{{ val }}"
+                                   value="{{ val }}" autocomplete="off"
+                                   {{ 'checked' if _tema_atual == val else '' }}>
+                            <label class="btn btn-outline-secondary btn-sm" for="tema-{{ val }}">
+                                <i class="fa-solid {{ ic }} me-1"></i>{{ lbl }}
+                            </label>
+                            {% endfor %}
+                        </div>
+
+                        {# Cor de acento — paleta curada + padrão da marca #}
+                        <label class="form-label fw-bold small d-block">{{ t('perfil.acento_label') }}</label>
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            {# Padrão da marca (reset → cor_acento NULL) #}
+                            <input type="radio" class="btn-check" name="cor_acento" id="acento-reset"
+                                   value="reset" autocomplete="off"
+                                   {{ 'checked' if not user.cor_acento else '' }}>
+                            <label class="acento-swatch" for="acento-reset"
+                                   style="background-color: #7AC143;"
+                                   title="{{ t('perfil.acento_padrao') }}">
+                                <i class="fa-solid fa-check"></i>
+                            </label>
+
+                            {% for cor in cores_acento %}
+                            <input type="radio" class="btn-check" name="cor_acento" id="acento-{{ loop.index }}"
+                                   value="{{ cor }}" autocomplete="off"
+                                   {{ 'checked' if user.cor_acento == cor else '' }}>
+                            <label class="acento-swatch" for="acento-{{ loop.index }}"
+                                   style="background-color: {{ cor }};" title="{{ cor }}">
+                                <i class="fa-solid fa-check"></i>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        <small class="text-muted d-block mb-3">{{ t('perfil.hint_acento') }}</small>
+
+                        <button type="submit" class="btn btn-mb-action fw-bold px-4">
+                            <i class="fa-solid fa-floppy-disk me-2"></i>{{ t('perfil.btn_salvar_prefs') }}
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            {# ── Foto de Perfil ── #}
+            <div class="card card-custom">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h6 class="fw-bold mb-0"><i class="fa-solid fa-camera me-2" style="color: var(--accent-fg);"></i>{{ t('perfil.foto_titulo') }}</h6>
+                    <small class="text-muted">{{ t('perfil.hint_foto') }}</small>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3 align-items-center">
+                        <div class="col-auto">
+                            {% if user.foto_perfil %}
+                            <img src="{{ url_for('dashboard.foto_perfil_file', filename=user.foto_perfil) }}"
+                                 class="rounded-circle border"
+                                 style="width: 56px; height: 56px; object-fit: cover; border-color: var(--accent) !important; border-width: 2px !important;"
+                                 alt="Foto atual">
+                            {% else %}
+                            {% set parts = user.nome.split() %}
+                            {% set iniciais = (parts[0][0] + (parts[1][0] if parts|length > 1 else ''))|upper %}
+                            <div class="d-flex align-items-center justify-content-center rounded-circle fw-bold"
+                                 style="width: 56px; height: 56px; background-color: var(--accent); color: var(--accent-contrast); font-size: 1rem;">
+                                {{ iniciais }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="col">
+                            <form action="{{ url_for('dashboard.perfil') }}" method="POST" enctype="multipart/form-data" class="d-flex gap-2 align-items-center flex-wrap">
+                                <input type="hidden" name="acao" value="foto">
+                                <input type="file" class="form-control form-control-sm" name="foto_perfil"
+                                       accept=".jpg,.jpeg,.png,.webp" style="max-width: 260px;">
+                                <button type="submit" class="btn btn-sm btn-mb-action fw-bold">
+                                    <i class="fa-solid fa-upload me-1"></i>{{ t('btn.enviar') }}
+                                </button>
+                            </form>
+                            <small class="text-muted mt-1 d-block">{{ t('perfil.hint_foto_formato') }}</small>
+                        </div>
+                        {% if user.foto_perfil %}
+                        <div class="col-auto">
+                            <form action="{{ url_for('dashboard.perfil') }}" method="POST"
+                                  onsubmit="return confirm('Remover a foto de perfil?')">
+                                <input type="hidden" name="acao" value="remover_foto">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            {# ── Dados de Contato ── #}
+            <div class="card card-custom">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h6 class="fw-bold mb-0"><i class="fa-solid fa-address-card me-2" style="color: var(--accent-fg);"></i>{{ t('perfil.contato_titulo') }}</h6>
+                    <small class="text-muted">{{ t('perfil.hint_contato') }}</small>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('dashboard.perfil') }}" method="POST">
+                        <input type="hidden" name="acao" value="contato">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">{{ t('label.email') }}</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fa-solid fa-envelope text-muted"></i></span>
+                                    <input type="email" class="form-control" name="email"
+                                           value="{{ user.email or '' }}"
+                                           placeholder="seu@email.com">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">{{ t('label.telefone') }}</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fa-solid fa-phone text-muted"></i></span>
+                                    <input type="text" class="form-control" name="telefone"
+                                           value="{{ user.telefone or '' }}"
+                                           placeholder="(11) 99999-9999">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button type="submit" class="btn btn-mb-action fw-bold px-4">
+                                <i class="fa-solid fa-floppy-disk me-2"></i>{{ t('perfil.btn_salvar_contato') }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            {# ── Alterar Senha ── #}
+            <div class="card card-custom">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h6 class="fw-bold mb-0"><i class="fa-solid fa-key me-2" style="color: var(--accent-fg);"></i>{{ t('perfil.senha_titulo') }}</h6>
+                    <small class="text-muted">{{ t('perfil.hint_senha') }}</small>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('dashboard.perfil') }}" method="POST">
+                        <input type="hidden" name="acao" value="senha">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label fw-bold small">{{ t('perfil.label_senha_atual') }}</label>
+                                <input type="password" class="form-control" name="senha_atual"
+                                       placeholder="Digite sua senha atual" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">{{ t('perfil.label_senha_nova') }}</label>
+                                <input type="password" class="form-control" name="senha_nova"
+                                       placeholder="Mínimo 6 caracteres" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">{{ t('perfil.label_senha_confirmar') }}</label>
+                                <input type="password" class="form-control" name="senha_confirmacao"
+                                       placeholder="Repita a nova senha" required>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button type="submit" class="btn btn-dark fw-bold px-4">
+                                <i class="fa-solid fa-lock me-2"></i>{{ t('perfil.btn_alterar_senha') }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}

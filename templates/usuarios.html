@@ -1,0 +1,465 @@
+﻿{% extends "base_hub.html" %}
+
+{% block title %}Usuários{% endblock %}
+{% block content %}
+<div class="container-fluid fade-in">
+    <div class="page-header">
+        <div>
+            <h2 class="h3 text-dark fw-bold"><i class="fa-solid fa-users-gear me-2"></i>{{ t('usuarios.titulo') }}</h2>
+            <p class="text-muted small mb-0">{{ t('usuarios.subtitulo') }}</p>
+        </div>
+        <button class="btn btn-mb-action shadow-sm fw-bold" onclick="abrirModalUsuario()">
+            <i class="fa-solid fa-user-plus me-2"></i>{{ t('usuarios.btn_novo') }}
+        </button>
+    </div>
+
+    {# ── Barra de filtros client-side ── #}
+    <div class="card card-custom p-3 mb-3">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted text-uppercase">{{ t('usuarios.filtro_nome_re') }}</label>
+                <input type="text" id="filtro-nome-re" class="form-control form-control-sm"
+                       placeholder="Buscar por nome ou RE..." oninput="filtrarUsuarios()">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted text-uppercase">{{ t('label.grupo') }}</label>
+                <select id="filtro-grupo" class="form-select form-select-sm" onchange="filtrarUsuarios()">
+                    <option value="">Todos</option>
+                    {% for g in grupos %}
+                    <option value="{{ g.nome }}">{{ g.nome.replace('_', ' ') }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted text-uppercase">{{ t('label.localidade') }}</label>
+                <select id="filtro-localidade" class="form-select form-select-sm" onchange="filtrarUsuarios()">
+                    <option value="">Todas</option>
+                    {% for loc in localidades %}
+                    <option value="{{ loc.sigla }}">{{ loc.sigla }} — {{ loc.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted text-uppercase">{{ t('label.camara') }}</label>
+                <select id="filtro-camara" class="form-select form-select-sm" onchange="filtrarUsuarios()">
+                    <option value="">Todas</option>
+                    <option value="SECO">{{ t('camara.seco') }}</option>
+                    <option value="RESFRIADO">{{ t('camara.resfriado') }}</option>
+                    <option value="CONGELADO">{{ t('camara.congelado') }}</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted text-uppercase">{{ t('label.turno') }}</label>
+                <select id="filtro-turno" class="form-select form-select-sm" onchange="filtrarUsuarios()">
+                    <option value="">Todos</option>
+                    <option value="T1">T1</option>
+                    <option value="T2">T2</option>
+                    <option value="T3">T3</option>
+                </select>
+            </div>
+            <div class="col-md-1">
+                <button type="button" class="btn btn-outline-secondary btn-sm w-100" onclick="limparFiltrosUsuarios()">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </div>
+        <div class="mt-2">
+            <small class="text-muted" id="filtro-contagem"></small>
+        </div>
+    </div>
+
+    <div class="card card-custom border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="tabela-usuarios">
+                <thead class="bg-light">
+                    <tr>
+                        <th style="width: 48px;"></th>
+                        <th>{{ t('label.nome') }}</th>
+                        <th>{{ t('usuarios.col_re') }}</th>
+                        <th>{{ t('label.grupo') }}</th>
+                        <th>{{ t('label.localidade') }}</th>
+                        <th>{{ t('label.camara') }}</th>
+                        <th>{{ t('label.turno') }}</th>
+                        <th>{{ t('label.acao') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in usuarios %}
+                    <tr data-nome="{{ u.nome|e }}"
+                        data-re="{{ u.re }}"
+                        data-grupo="{{ u.grupo.nome if u.grupo else '' }}"
+                        data-loc="{{ u.localidade.sigla if u.nivel_acesso == 'CD' and u.localidade else '' }}"
+                        data-camara="{{ u.camara or '' }}"
+                        data-turno="{{ u.turno or '' }}">
+                        <td>
+                            {% if u.foto_cracha %}
+                                <img src="{{ url_for('dashboard.foto_cracha_file', filename=u.foto_cracha) }}"
+                                     class="rounded-circle border"
+                                     style="width:38px;height:38px;object-fit:cover;"
+                                     alt="avatar">
+                            {% elif u.foto_perfil %}
+                                <img src="{{ url_for('dashboard.foto_perfil_file', filename=u.foto_perfil) }}"
+                                     class="rounded-circle border"
+                                     style="width:38px;height:38px;object-fit:cover;"
+                                     alt="avatar">
+                            {% else %}
+                                {% set _np = (u.nome or '').split() %}
+                                {% set _ini = (_np[0][:1] + (_np[1][:1] if _np|length > 1 else ''))|upper %}
+                                <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white"
+                                     style="width:38px;height:38px;background:var(--mb-green);color:#1e1f22!important;font-size:0.75rem;">
+                                    {{ _ini }}
+                                </div>
+                            {% endif %}
+                        </td>
+                        <td class="fw-bold">
+                            {{ u.nome }}
+                            {% if u.criado_em_campo %}
+                                <span class="badge bg-info text-dark ms-1" style="font-size:0.6rem;">{{ t('usuarios.badge_em_campo') }}</span>
+                            {% endif %}
+                            {# T2 — e-mail é a credencial de login: exibir aqui deixa visível
+                               quem ainda não tem (não consegue logar) na transição RE → e-mail #}
+                            {% if u.email %}
+                                <div class="small text-muted fw-normal">{{ u.email }}</div>
+                            {% elif not u.grupo or u.grupo.nome != 'OPERADOR' %}
+                                {# OPERADOR não faz login — sem e-mail é o estado normal dele #}
+                                <div class="small text-warning fw-normal" title="{{ t('usuarios.sem_email_hint') }}">
+                                    <i class="fa-solid fa-triangle-exclamation me-1"></i>{{ t('usuarios.sem_email') }}
+                                </div>
+                            {% endif %}
+                        </td>
+                        <td class="font-monospace">{{ u.re }}</td>
+                        <td>
+                            {% if u.grupo %}
+                                {% set gc = {
+                                    'TI_MASTER':   'bg-dark',
+                                    'TI':          'bg-dark',
+                                    'DIRETOR':     'bg-danger',
+                                    'GERENTE':     'bg-primary',
+                                    'SUPERVISOR':  'bg-info text-dark',
+                                    'COORDENADOR': 'bg-info text-dark',
+                                    'ANALISTA':    'bg-secondary',
+                                    'ESPECIALISTA':'bg-warning text-dark',
+                                    'TECNICO':     'bg-warning text-dark',
+                                    'LIDER':       'bg-success',
+                                    'OPERADOR':    'bg-secondary',
+                                    'CONSULTA':    'bg-light text-dark border',
+                                    'AUDITOR':     'bg-danger',
+                                } %}
+                                <span class="badge {{ gc.get(u.grupo.nome, 'bg-secondary') }}">
+                                    {{ u.grupo.nome.replace('_', ' ') }}
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ t('usuarios.sem_grupo') }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="small">
+                            {% if u.nivel_acesso == 'CD' %}
+                                {% if u.localidade %}
+                                    <span class="badge bg-secondary">{{ u.localidade.sigla }}</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            {% elif u.nivel_acesso == 'PAIS' %}
+                                {% if u.pais %}
+                                    <span class="badge bg-primary" title="{{ t('label.pais') }}">
+                                        <i class="fa-solid fa-flag me-1" style="font-size:0.65em;"></i>{{ u.pais.sigla }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            {% elif u.nivel_acesso == 'AMERICA' %}
+                                {% if u.america %}
+                                    <span class="badge bg-info text-dark" title="{{ t('label.america') }}">
+                                        <i class="fa-solid fa-earth-americas me-1" style="font-size:0.65em;"></i>{{ u.america.sigla }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            {% elif u.nivel_acesso == 'GLOBAL' %}
+                                <span class="badge bg-dark" title="{{ t('nivel.global') }}">
+                                    <i class="fa-solid fa-globe me-1" style="font-size:0.65em;"></i>Global
+                                </span>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if u.camara == 'SECO' %}
+                                <span class="badge bg-info text-dark" style="font-size:0.7em;">{{ t('camara.seco') }}</span>
+                            {% elif u.camara == 'RESFRIADO' %}
+                                <span class="badge bg-success" style="font-size:0.7em;">{{ t('camara.resfriado') }}</span>
+                            {% elif u.camara == 'CONGELADO' %}
+                                <span class="badge" style="background-color:#7c3aed;font-size:0.7em;">{{ t('camara.congelado') }}</span>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>
+                            {% if u.turno %}
+                                <span class="badge bg-secondary">{{ u.turno }}</span>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="d-flex gap-2 align-items-center flex-wrap">
+                            <button class="btn btn-sm btn-outline-primary"
+                                    onclick="editarUsuario('{{ u.id }}', '{{ u.nome | replace("'", "\\'") }}', '{{ u.re }}', '{{ u.grupo_id or '' }}', '{{ u.localidade_id or '' }}', '{{ u.camara or '' }}', '{{ u.turno or '' }}', '{{ u.nivel_acesso or 'CD' }}', '{{ u.pais_id or '' }}', '{{ u.america_id or '' }}', '{{ (u.email or '') | replace("'", "\\'") }}')">
+                                <i class="fa-solid fa-pen"></i> {{ t('btn.editar') }}
+                            </button>
+                            {% if u.criado_em_campo %}
+                            <form action="{{ url_for('dashboard.revisar_usuario', user_id=u.id) }}"
+                                  method="POST" class="d-inline"
+                                  onsubmit="return confirm('Marcar conta de {{ u.nome }} como revisada?\nIsso remove o alerta do dashboard.')">
+                                <button type="submit" class="btn btn-sm btn-outline-success">
+                                    <i class="fa-solid fa-user-check"></i> {{ t('usuarios.btn_revisar') }}
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalUsuario" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title" id="modalUsuarioTitulo">{{ t('usuarios.modal_titulo') }}</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('dashboard.gerenciar_usuarios') }}" method="POST"
+                  enctype="multipart/form-data">
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="user_id">
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">{{ t('label.nome_completo') }} <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="nome" id="nome" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">{{ t('usuarios.col_re') }} <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control font-monospace" name="re" id="re"
+                               pattern="[0-9]+" minlength="4" inputmode="numeric"
+                               placeholder="Ex: 100001" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">{{ t('label.email') }}</label>
+                        <input type="email" class="form-control" name="email" id="email_usuario"
+                               placeholder="nome@empresa.com">
+                        <div class="form-text">{{ t('usuarios.hint_email') }}</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">{{ t('label.senha') }} <span class="text-danger" id="senha_asterisco">*</span></label>
+                        <input type="password" class="form-control" name="senha" id="senha"
+                               placeholder="Digite a senha">
+                        <div class="form-text" id="msg_senha">{{ t('usuarios.hint_senha_novo') }}</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">{{ t('usuarios.label_grupo_acesso') }}</label>
+                        <select class="form-select" name="grupo_id" id="grupo_id" required>
+                            {% for g in grupos %}
+                            <option value="{{ g.id }}">{{ g.nome.replace('_', ' ') }} — {{ g.descricao }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">{{ t('label.nivel_acesso') }}</label>
+                        <select class="form-select" name="nivel_acesso" id="nivel_acesso_select"
+                                onchange="atualizarSeletoresNivel(this.value)">
+                            <option value="CD">{{ t('usuarios.nivel.cd') }}</option>
+                            <option value="PAIS">{{ t('usuarios.nivel.pais') }}</option>
+                            <option value="AMERICA">{{ t('usuarios.nivel.america') }}</option>
+                            <option value="GLOBAL">{{ t('usuarios.nivel.global') }}</option>
+                        </select>
+                        <div class="form-text">{{ t('usuarios.hint_nivel') }}</div>
+                    </div>
+
+                    <div id="seletor_localidade" class="mb-3">
+                        <label class="form-label fw-bold small">{{ t('label.localidade') }}</label>
+                        <select class="form-select" name="localidade_id" id="localidade_id">
+                            <option value="">{{ t('msg.selecione') }}</option>
+                            {% for loc in localidades %}
+                            <option value="{{ loc.id }}">{{ loc.sigla_completa }} — {{ loc.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div id="seletor_pais" class="mb-3" style="display:none">
+                        <label class="form-label fw-bold small">{{ t('label.pais') }}</label>
+                        <select class="form-select" name="pais_id_scope" id="pais_id_select">
+                            <option value="">— Selecione o país —</option>
+                            {% for p in paises %}
+                            <option value="{{ p.id }}">{{ p.sigla }} — {{ p.nome }} ({{ p.america.sigla }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div id="seletor_america" class="mb-3" style="display:none">
+                        <label class="form-label fw-bold small">{{ t('label.america') }}</label>
+                        <select class="form-select" name="america_id" id="america_id_select">
+                            <option value="">— Selecione a América —</option>
+                            {% for am in americas %}
+                            <option value="{{ am.id }}">{{ am.sigla }} — {{ am.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-bold small">{{ t('label.camara') }}</label>
+                            <select class="form-select" name="camara" id="camara_usuario">
+                                <option value="">— Não definido —</option>
+                                <option value="SECO">{{ t('camara.seco') }}</option>
+                                <option value="RESFRIADO">{{ t('camara.resfriado') }}</option>
+                                <option value="CONGELADO">{{ t('camara.congelado') }}</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-bold small">{{ t('label.turno') }}</label>
+                            <select class="form-select" name="turno" id="turno_usuario">
+                                <option value="">— Não definido —</option>
+                                <option value="T1">T1</option>
+                                <option value="T2">T2</option>
+                                <option value="T3">T3</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">
+                            {{ t('usuarios.label_foto_cracha') }}
+                            <span class="badge bg-secondary ms-1" style="font-size:0.65rem;">Opcional</span>
+                        </label>
+                        <input type="file" class="form-control" name="foto_cracha" id="foto_cracha"
+                               accept=".jpg,.jpeg,.png,.webp">
+                        <div class="form-text">
+                            <i class="fa-solid fa-id-card me-1"></i>
+                            {{ t('usuarios.hint_foto_cracha') }}
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('btn.cancelar') }}</button>
+                    <button type="submit" class="btn btn-mb-action fw-bold">
+                        <i class="fa-solid fa-floppy-disk me-1"></i>{{ t('usuarios.btn_salvar') }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ── Filtros client-side ──
+    // Esconde/mostra linhas da tabela sem precisar de reload. Compara
+    // o texto da linha normalizado (sem acento, lower) contra o input.
+    function filtrarUsuarios() {
+        const texto  = (document.getElementById('filtro-nome-re').value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const grupo  = document.getElementById('filtro-grupo').value;
+        const loc    = document.getElementById('filtro-localidade').value;
+        const camara = document.getElementById('filtro-camara').value;
+        const turno  = document.getElementById('filtro-turno').value;
+
+        const linhas = document.querySelectorAll('#tabela-usuarios tbody tr[data-nome]');
+        let visiveis = 0;
+        linhas.forEach(function (tr) {
+            const nome    = (tr.dataset.nome   || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const re      = (tr.dataset.re     || '').toLowerCase();
+            const grp     = tr.dataset.grupo   || '';
+            const localid = tr.dataset.loc     || '';
+            const cam     = tr.dataset.camara  || '';
+            const tur     = tr.dataset.turno   || '';
+
+            const matchTexto  = !texto  || nome.includes(texto) || re.includes(texto);
+            const matchGrupo  = !grupo  || grp     === grupo;
+            const matchLoc    = !loc    || localid === loc;
+            const matchCamara = !camara || cam      === camara;
+            const matchTurno  = !turno  || tur      === turno;
+
+            const visivel = matchTexto && matchGrupo && matchLoc && matchCamara && matchTurno;
+            tr.style.display = visivel ? '' : 'none';
+            if (visivel) visiveis++;
+        });
+
+        const total = linhas.length;
+        const el = document.getElementById('filtro-contagem');
+        if (texto || grupo || loc || camara || turno) {
+            el.textContent = `Mostrando ${visiveis} de ${total} usuário(s)`;
+        } else {
+            el.textContent = '';
+        }
+    }
+
+    function limparFiltrosUsuarios() {
+        document.getElementById('filtro-nome-re').value = '';
+        document.getElementById('filtro-grupo').value = '';
+        document.getElementById('filtro-localidade').value = '';
+        document.getElementById('filtro-camara').value = '';
+        document.getElementById('filtro-turno').value = '';
+        filtrarUsuarios();
+    }
+
+    function atualizarSeletoresNivel(nivel) {
+        document.getElementById('seletor_localidade').style.display = nivel === 'CD'      ? 'block' : 'none';
+        document.getElementById('seletor_pais').style.display       = nivel === 'PAIS'    ? 'block' : 'none';
+        document.getElementById('seletor_america').style.display    = nivel === 'AMERICA' ? 'block' : 'none';
+        // O required acompanha o nível. Fixo no HTML ele ficaria ligado num
+        // campo ESCONDIDO nos outros níveis, e o navegador recusa o envio sem
+        // conseguir mostrar onde — botão que não faz nada, sem mensagem.
+        document.getElementById('localidade_id').required  = nivel === 'CD';
+        document.getElementById('pais_id_select').required = nivel === 'PAIS';
+        document.getElementById('america_id_select').required = nivel === 'AMERICA';
+    }
+
+    function abrirModalUsuario() {
+        document.getElementById('user_id').value = '';
+        document.getElementById('nome').value = '';
+        document.getElementById('re').value = '';
+        document.getElementById('email_usuario').value = '';
+        document.getElementById('grupo_id').selectedIndex = 0;
+        document.getElementById('localidade_id').value = '';
+        document.getElementById('pais_id_select').value = '';
+        document.getElementById('america_id_select').value = '';
+        document.getElementById('nivel_acesso_select').value = 'CD';
+        document.getElementById('camara_usuario').value = '';
+        document.getElementById('turno_usuario').value = '';
+        document.getElementById('senha').value = '';
+        document.getElementById('senha').required = true;
+        document.getElementById('senha_asterisco').style.display = '';
+        document.getElementById('msg_senha').textContent = "{{ t('usuarios.hint_senha_novo') }}";
+        document.getElementById('foto_cracha').value = '';
+        document.getElementById('modalUsuarioTitulo').textContent = "{{ t('usuarios.modal_titulo') }}";
+        atualizarSeletoresNivel('CD');
+
+        new bootstrap.Modal(document.getElementById('modalUsuario')).show();
+    }
+
+    function editarUsuario(id, nome, re, grupoId, localidadeId, camara, turno, nivelAcesso, paisId, americaId, email) {
+        document.getElementById('user_id').value = id;
+        document.getElementById('nome').value = nome;
+        document.getElementById('re').value = re;
+        document.getElementById('email_usuario').value = email || '';
+        document.getElementById('grupo_id').value = grupoId;
+        document.getElementById('localidade_id').value = localidadeId || '';
+        document.getElementById('camara_usuario').value = camara || '';
+        document.getElementById('turno_usuario').value = turno || '';
+        document.getElementById('nivel_acesso_select').value = nivelAcesso || 'CD';
+        document.getElementById('pais_id_select').value = paisId || '';
+        document.getElementById('america_id_select').value = americaId || '';
+        document.getElementById('senha').value = '';
+        document.getElementById('senha').required = false;
+        document.getElementById('senha_asterisco').style.display = 'none';
+        document.getElementById('msg_senha').textContent = "{{ t('usuarios.hint_senha_alterar') }}";
+        document.getElementById('foto_cracha').value = '';
+        document.getElementById('modalUsuarioTitulo').textContent = "{{ t('usuarios.modal_titulo_editar') }}";
+        atualizarSeletoresNivel(nivelAcesso || 'CD');
+
+        new bootstrap.Modal(document.getElementById('modalUsuario')).show();
+    }
+</script>
+{% endblock %}
