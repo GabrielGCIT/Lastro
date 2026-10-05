@@ -221,7 +221,7 @@ def test_filtro_de_cd_fora_do_escopo_nao_amplia(app, inventario):
     db.session.add(ItemComplementar(empresa_id=inventario.mb.id,
                                     categoria_id=inventario.hs_cat.id,
                                     identificador='HS-ZZZ', localidade_id=distante.id))
-    ti = Grupo.query.filter_by(nome='TI_MASTER').first()
+    ti = Grupo.query.filter_by(nome='TI').first()
     preso = Usuario(nome='Preso ao CD', re='6199', email='preso@mb.com',
                     senha_hash=generate_password_hash('x', method='scrypt'),
                     grupo_id=ti.id, empresa_id=inventario.mb.id,
@@ -232,7 +232,6 @@ def test_filtro_de_cd_fora_do_escopo_nao_amplia(app, inventario):
     c = app.test_client()
     with c.session_transaction() as s:
         s['user_id'], s['nome'], s['re'] = preso.id, preso.nome, preso.re
-        s['empresa_id'], s['is_owner'] = preso.empresa_id, False
         s['nivel_acesso'], s['localidade_id'] = 'CD', inventario.loc.id
 
     resposta = c.get('/complementos?localidade=ZZZ')

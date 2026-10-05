@@ -31,7 +31,7 @@ def usuario_sem_localidade(app, loc):
     e o nível CD é o padrão de quem trabalha no balcão.
     """
     mb = Empresa.query.filter_by(nome='Martin Brower').first()
-    ti = Grupo.query.filter_by(nome='TI_MASTER').first()
+    ti = Grupo.query.filter_by(nome='TI').first()
     u = Usuario(nome='Recém-criado', re='9900', email='novo@mb.com',
                 senha_hash=generate_password_hash('x', method='scrypt'),
                 grupo_id=ti.id, empresa_id=mb.id, nivel_acesso='CD',
@@ -119,17 +119,17 @@ def test_o_motivo_da_trava_coletor_orfao_e_invisivel(app, admin_client, loc,
                                                      cliente_logado):
     """Documenta o dano que a trava evita — e vale por si.
 
-    Um coletor sem CD só existe para o Owner. Quem conduz o treinamento é
-    justamente o Owner: ele cadastra, confere na tela dele, e a equipe inteira
-    abre o sistema num parque vazio.
+    Um coletor sem CD não pertence a empresa nenhuma, então não aparece para
+    NINGUÉM — nem para o administrador que o cadastrou. Sem a trava, ele some no
+    instante em que é salvo, e o caminho óbvio vira cadastrar de novo.
     """
     orfao = Coletor(serial_number='SN-FANTASMA', numero_patrimonio='4444',
                     localidade_id=None, status='Disponível')
     db.session.add(orfao)
     db.session.commit()
 
-    do_owner = admin_client.get('/coletores').get_data(as_text=True)
-    assert 'SN-FANTASMA' in do_owner, 'o Owner enxerga — por isso ninguém percebe'
+    do_admin = admin_client.get('/coletores').get_data(as_text=True)
+    assert 'SN-FANTASMA' not in do_admin, 'coletor sem CD apareceu para o admin'
 
     mb = Empresa.query.filter_by(nome='Martin Brower').first()
     global_mb = Usuario.query.filter_by(re='9900').first()
@@ -147,7 +147,7 @@ def test_o_motivo_da_trava_coletor_orfao_e_invisivel(app, admin_client, loc,
 # ---------------------------------------------------------------------------
 
 def _cadastrar_usuario(client, **extra):
-    grupo = Grupo.query.filter_by(nome='OPERADOR').first() or Grupo.query.first()
+    grupo = Grupo.query.filter_by(nome='BALCAO').first()
     dados = {'nome': 'Operador Novo', 're': '7777', 'email': 'op@mb.com',
              'senha': 'trocar123', 'grupo_id': str(grupo.id),
              'nivel_acesso': 'CD', 'localidade_id': ''}

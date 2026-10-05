@@ -4,8 +4,8 @@ T3 — Núcleo de testes de ISOLAMENTO multi-empresa.
 Fixture com 2 empresas populadas (MB = A e Acme = B), cada uma com sua
 localidade, um usuário GLOBAL não-owner e um colaborador. Afirma que
 cross-access em lista/detalhe/API/arquivo é impossível — 404, zero resultados
-ou contexto recusado — e que o Owner enxerga tudo. O T6 expande isto para a
-suite completa (portão de todo patch futuro).
+ou contexto recusado. Não existe mais quem enxergue "tudo do banco": nem o
+administrador vê a outra empresa.
 """
 import os
 
@@ -27,7 +27,6 @@ def _cliente_logado(app, user):
         s['nome']         = user.nome
         s['re']           = user.re
         s['empresa_id']   = user.empresa_id
-        s['is_owner']     = bool(user.is_owner)
         s['nivel_acesso'] = user.nivel_acesso
     return c
 
@@ -48,7 +47,6 @@ def test_get_filtro_escopa_na_empresa(app, cenario):
     from flask import session
     from app.helpers import get_filtro_localidade
     with app.test_request_context():
-        session['is_owner']     = False
         session['empresa_id']   = cenario.mb.id
         session['nivel_acesso'] = 'GLOBAL'
         ids = get_filtro_localidade()
@@ -56,19 +54,23 @@ def test_get_filtro_escopa_na_empresa(app, cenario):
     assert cenario.locB.id not in ids            # localidade de outro tenant fora
 
 
-def test_get_filtro_owner_recebe_none(app, cenario):
+def test_get_filtro_nunca_devolve_sem_filtro(app, cenario):
+    """Nem o administrador GLOBAL recebe None ("sem filtro"): sempre a lista da
+    empresa dele, e só dela."""
     from flask import session
     from app.helpers import get_filtro_localidade
     with app.test_request_context():
-        session['is_owner'] = True
-        assert get_filtro_localidade() is None    # None é exclusivo do Owner
+        session['empresa_id']   = cenario.mb.id
+        session['nivel_acesso'] = 'GLOBAL'
+        ids = get_filtro_localidade()
+    assert ids is not None
+    assert cenario.locB.id not in ids
 
 
 def test_get_filtro_nao_owner_sem_empresa_fecha(app, cenario):
     from flask import session
     from app.helpers import get_filtro_localidade
     with app.test_request_context():
-        session['is_owner']   = False
         session['empresa_id'] = None
         assert get_filtro_localidade() == []      # fail-closed, nunca "vê tudo"
 
@@ -155,7 +157,7 @@ def test_auditoria_filtra_por_empresa(app, cenario):
 # Owner enxerga todas as empresas
 # ---------------------------------------------------------------------------
 
-def test_owner_confirma_colaborador_de_qualquer_empresa(app, cenario):
+def test_admin_nao_alcanca_colaborador_de_outra_empresa(app, cenario):
     cAdmin = _cliente_logado(app, cenario.admin)
     assert cAdmin.get('/admin/colaboradores/api/re/C001').status_code == 200
-    assert cAdmin.get('/admin/colaboradores/api/re/C002').status_code == 200
+    assert cAdmin.get('/admin/colaboradores/api/re/C002').status_code == 404

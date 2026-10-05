@@ -72,7 +72,7 @@ def cenario(app, loc):
     # uma regra nova desta fatia.
     from werkzeug.security import generate_password_hash
     from app.models import Usuario, Grupo
-    ti = Grupo.query.filter_by(nome='TI_MASTER').first()
+    ti = Grupo.query.filter_by(nome='TI').first()
     analista = Usuario(nome='Analista Balcao', re='9100', email='balcao@mb.test',
                        senha_hash=generate_password_hash('x', method='scrypt'),
                        grupo_id=ti.id, empresa_id=mb.id, nivel_acesso='GLOBAL',

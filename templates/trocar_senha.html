@@ -1,0 +1,30 @@
+{% extends "base_cartao.html" %}
+{% block title %}{{ t('senha.trocar_titulo') }}{% endblock %}
+{% block content %}
+<h1>{{ t('senha.trocar_titulo') }}</h1>
+<p class="subtitle">{{ t('senha.trocar_instrucao') }}</p>
+
+<form action="{{ url_for('auth.trocar_senha') }}" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="mb-3">
+        <label class="form-label" for="senha_nova">{{ t('reset.nova_senha') }}</label>
+        <input type="password" class="form-control" id="senha_nova" name="senha_nova"
+               minlength="{{ senha_minima }}" required autofocus autocomplete="new-password">
+        <div class="form-text">{{ t('senha.regra', n=senha_minima) }}</div>
+    </div>
+    <div class="mb-4">
+        <label class="form-label" for="senha_confirmacao">{{ t('reset.confirmar_senha') }}</label>
+        <input type="password" class="form-control" id="senha_confirmacao" name="senha_confirmacao"
+               minlength="{{ senha_minima }}" required autocomplete="new-password">
+    </div>
+    <button type="submit" class="btn-acao">
+        <i class="fa-solid fa-key me-2"></i>{{ t('senha.btn_trocar') }}
+    </button>
+</form>
+
+<div class="text-center mt-4">
+    <a href="{{ url_for('auth.logout') }}" class="link-voltar">
+        <i class="fa-solid fa-right-from-bracket me-1"></i>{{ t('nav.sair') }}
+    </a>
+</div>
+{% endblock %}

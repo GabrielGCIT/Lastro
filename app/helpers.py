@@ -9,7 +9,7 @@ from flask import session, redirect, url_for, flash, request
 from werkzeug.security import generate_password_hash
 from werkzeug.utils import secure_filename
 
-from app import db, FOTO_FOLDER, ALLOWED_IMG_EXTENSIONS
+from app import db, FOTO_FOLDER, INSTANCE_FOLDER, ALLOWED_IMG_EXTENSIONS
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +111,7 @@ def email_em_uso(email: str, excluir_id=None) -> bool:
 # ---------------------------------------------------------------------------
 
 # Sentinela do registrar_log: distingue "empresa não informada" (usa a da
-# sessão/impersonation) de um None explícito passado pelo caller.
+# sessão) de um None explícito passado pelo caller.
 _LOG_EMPRESA_DA_SESSAO = object()
 
 
@@ -124,20 +124,15 @@ def registrar_log(acao: str, detalhe: str, empresa_id=_LOG_EMPRESA_DA_SESSAO):
     capturado pelo supervisor/systemd, mas não propaga para o usuário.
 
     empresa_id opcional: quem sabe a que trilha o evento pertence pode carimbar
-    explicitamente (o console de empresas usa — ações de PLATAFORMA não podem
-    cair na trilha do tenant que o Owner estiver impersonando). Sem o argumento,
-    vale a empresa efetiva da sessão (impersonada, se houver — T4c).
+    explicitamente. Sem o argumento, vale a empresa da sessão.
     """
     try:
         from app.models import LogAuditoria
         if empresa_id is _LOG_EMPRESA_DA_SESSAO:
-            # T3 — o log nasce carimbado com a empresa da sessão. A empresa vê só
-            # o seu; o Owner vê tudo (a tela de auditoria filtra por empresa_id).
-            # empresa_id None (ex: log de sistema fora de request) é aceitável —
-            # o backfill do seed_empresa o vincula à MB no boot seguinte.
-            # T4c — Owner impersonando carimba a empresa impersonada (a ação
-            # pertence à trilha daquele tenant), não a MB do Owner.
-            empresa_id = _impersonada_id() or session.get('empresa_id')
+            # O log nasce carimbado com a empresa da sessão (a tela de auditoria
+            # filtra por empresa_id). empresa_id None (log fora de request) é
+            # aceitável — o backfill do seed_empresa o vincula no boot seguinte.
+            empresa_id = session.get('empresa_id')
         log = LogAuditoria(
             usuario=session.get('nome', 'Sistema/Anônimo'),
             user_re=session.get('re'),
@@ -212,57 +207,18 @@ def permissao_required(*codigos):
 # MULTI-TENANCY — FILTRO POR CONTEXTO DE LOCALIDADE
 # ---------------------------------------------------------------------------
 
-def _impersonada_id():
-    """Empresa que o Owner está impersonando nesta sessão (T4c), ou None.
-
-    Chave PRÓPRIA `session['empresa_impersonada']` — o _sync_permissoes reescreve
-    empresa_id/is_owner a cada request, mas NÃO toca nesta chave, então a
-    impersonation sobrevive ao hook. Só vale para o Owner (is_owner): para
-    qualquer outro é ignorada, mesmo se a chave estiver setada (tampering) —
-    fail-closed. Os helpers de isolamento consultam isto ANTES do atalho is_owner,
-    fazendo o Owner "dentro" da empresa agir como um GLOBAL só daquele tenant.
-    """
-    if not session.get('is_owner'):
-        return None
-    return session.get('empresa_impersonada')
-
-
 def get_empresa_id():
-    """Retorna a empresa_id efetiva da sessão — a âncora do isolamento multi-tenant.
-
-    T4c — o Owner impersonando devolve o id da empresa impersonada (age como ela).
-    None é EXCLUSIVO do Owner SEM impersonation (is_owner): significa "todas as
-    empresas". Um usuário comum sempre tem uma empresa; se por algum motivo a
-    sessão não a carregar, devolve None mas o chamador (get_filtro_localidade,
-    guards de serving) trata isso como fail-closed via is_owner — nunca "vê tudo".
-
-    Não confundir os dois Nones: o do Owner (autorizado a tudo) e o de uma
-    sessão comum quebrada. Sempre cheque is_owner ANTES de interpretar None.
-    """
-    imp = _impersonada_id()
-    if imp is not None:
-        return imp
-    if session.get('is_owner'):
-        return None
+    """A empresa da sessão — a âncora do isolamento. None = sessão sem empresa."""
     return session.get('empresa_id')
 
 
 def empresa_visivel(empresa_id_dono) -> bool:
-    """True se a empresa dona de um recurso é visível para a sessão atual.
+    """True se a empresa dona de um recurso é a da sessão.
 
-    Base dos guards de serving de arquivo (T3): o Owner enxerga qualquer
-    empresa; o usuário comum só a própria. Recurso órfão (empresa_id_dono None,
-    ex.: localidade legada sem empresa) só é visível ao Owner — não dá para
-    provar que pertence ao tenant da sessão, então fail-closed.
-
-    T4c — o Owner impersonando enxerga SÓ a empresa impersonada (nem as outras,
-    nem os órfãos): a checagem da impersonation vem antes do atalho is_owner.
+    Recurso órfão (empresa_id_dono None) nunca é visível: não dá para provar que
+    pertence à empresa da sessão, então fail-closed. Sessão sem empresa também
+    não enxerga nada.
     """
-    imp = _impersonada_id()
-    if imp is not None:
-        return empresa_id_dono == imp
-    if session.get('is_owner'):
-        return True
     emp = session.get('empresa_id')
     return emp is not None and empresa_id_dono == emp
 
@@ -270,26 +226,12 @@ def empresa_visivel(empresa_id_dono) -> bool:
 def criterio_empresa(coluna):
     """Critério SQL fail-closed para escopar uma LEITURA por empresa (T4a).
 
-    Padroniza os ~14 filtros que antes faziam `coluna == session['empresa_id']`
-    inline. O ganho não é só menos boilerplate: `coluna == None` (não-owner com
-    sessão quebrada, sem empresa_id) gerava `coluna IS NULL`, que casava com os
-    registros ÓRFÃOS em vez de zerar o resultado — um vazamento fail-OPEN. Aqui
-    o mesmo caso devolve `db.false()`: zero linhas, sempre.
-
-    Contrato (espelha get_filtro_localidade):
-        Owner            → db.true()  (sem filtro; enxerga todas as empresas)
-        sessão sem empresa → db.false() (não-owner sem tenant: fecha)
-        senão            → coluna == empresa_id
+    `coluna == session['empresa_id']` inline viraria `coluna IS NULL` numa sessão
+    sem empresa — casando com os registros ÓRFÃOS em vez de zerar o resultado,
+    um vazamento fail-OPEN. Aqui o mesmo caso devolve `db.false()`.
 
     Usar sempre como `Model.query.filter(criterio_empresa(Model.empresa_id))`.
-    T4c — a impersonation entra AQUI (ponto único das 14 leituras): o Owner
-    "dentro" de uma empresa passa a filtrar por ela como se fosse o tenant.
     """
-    imp = _impersonada_id()
-    if imp is not None:
-        return coluna == imp
-    if session.get('is_owner'):
-        return db.true()
     empresa_id = session.get('empresa_id')
     if not empresa_id:
         return db.false()
@@ -367,34 +309,20 @@ def get_filtro_localidade():
     """IDs de Localidade visíveis para a sessão — fail-closed por construção (T3).
 
     Contrato:
-        None  — EXCLUSIVO do Owner (is_owner): sem filtro, enxerga todas as
-                empresas e até localidades órfãs (empresa_id NULL).
         [ids] — localidades permitidas, SEMPRE dentro da empresa da sessão.
         []    — sem acesso: ZERO resultados em TODOS os módulos.
 
-    O usuário comum NUNCA recebe None. O conjunto base são as localidades da
-    empresa da sessão; o nível/contexto (CD/PAIS/AMERICA/GLOBAL) só ESTREITA
-    dentro desse base set — GLOBAL de empresa = todas as localidades da empresa
-    dele, jamais do banco inteiro. Uma sessão comum sem empresa (estado
-    inválido) cai em [] — fail-closed, nunca "vê tudo".
+    Nunca devolve None: não existe mais quem enxergue "tudo do banco". Os
+    callers ainda tratam None como "sem filtro" por herança — o ramo ficou morto
+    e inofensivo.
 
-    Os callers seguem o padrão: None → sem filtro; [ids] → `.in_(ids)`;
-    [] → filtro que zera o resultado (`filter(False)`).
-
-    T4c — o Owner impersonando NÃO recebe None: o base set vira as localidades da
-    empresa impersonada (ele vira um GLOBAL só daquele tenant). O view_context é
-    limpo ao entrar, então _escopo_geografico devolve None (toda a empresa).
+    O conjunto base são as localidades da empresa da sessão; o nível/contexto
+    (CD/PAIS/AMERICA/GLOBAL) só ESTREITA dentro dele. Sessão sem empresa (estado
+    inválido) cai em [].
     """
-    imp = _impersonada_id()
-    if imp is None:
-        if session.get('is_owner'):
-            return None
-        empresa_id = session.get('empresa_id')
-        if not empresa_id:
-            # Não-owner sem empresa carregada — não dá para provar escopo. Fecha.
-            return []
-    else:
-        empresa_id = imp
+    empresa_id = session.get('empresa_id')
+    if not empresa_id:
+        return []
 
     from app.models import Localidade
     base = {
@@ -422,27 +350,19 @@ def get_filtro_localidade():
 
 
 def empresa_para_escrita():
-    """Empresa (tenant) que deve carimbar um registro criado nesta sessão.
+    """Empresa que deve carimbar um registro criado nesta sessão.
 
-    Promoção do _empresa_para_categorias (ativos.py): get_empresa_id() devolve
-    None para o Owner, que então cai na empresa da própria sessão (o admin da MB
-    é MB). A impersonation do T4 troca session['empresa_id'] e entra por aqui.
-
-    Devolve None só quando não há tenant algum na sessão — Owner de bootstrap
-    sem contexto, ou sessão quebrada. O chamador BLOQUEIA a criação pedindo
-    contexto nesse caso; nunca grava um registro órfão (decisão de produto do
-    kickoff 15/07, mesmo padrão de categoria_criar).
+    Devolve None só numa sessão quebrada, sem empresa. O chamador BLOQUEIA a
+    criação nesse caso — nunca grava um registro órfão.
     """
-    return get_empresa_id() or session.get('empresa_id')
+    return session.get('empresa_id')
 
 
 def localidade_no_escopo(loc_id) -> bool:
     """True se a Localidade loc_id é gravável/visível para a sessão atual.
 
-    Predicado sobre o mesmo conjunto de get_filtro_localidade: o Owner (None)
-    enxerga qualquer localidade, inclusive órfãs; o usuário comum só as da sua
-    empresa. Registro sem localidade (loc_id None) só é do Owner — fail-closed.
-    Base da validação de FK das famílias E (coletor/ativo por localidade).
+    Predicado sobre o mesmo conjunto de get_filtro_localidade. Registro sem
+    localidade (loc_id None) não é de ninguém — fail-closed.
     """
     permitidas = get_filtro_localidade()
     if permitidas is None:
@@ -455,20 +375,16 @@ def localidade_para_escrita(loc_id):
 
     Uma localidade de OUTRA empresa (ou inexistente) é tratada como se não
     existisse — o chamador rejeita a operação, nunca devolve 403 (mesmo padrão
-    "inexistente" do T3). O Owner grava em qualquer localidade existente.
+    "inexistente" do T3).
 
     Retorna a tupla (ok, loc_id):
         (True,  None)  — loc_id vazio: ausência legítima de localidade.
-        (True,  int)   — dentro do escopo (ou Owner + localidade existe): pode gravar.
+        (True,  int)   — dentro do escopo: pode gravar.
         (False, None)  — fora do escopo/inexistente: rejeitar a operação.
     """
     if not loc_id:
         return True, None
     permitidas = get_filtro_localidade()
-    if permitidas is None:
-        # Owner — qualquer localidade existente serve; confere para não gravar FK quebrada.
-        from app.models import Localidade
-        return (True, loc_id) if db.session.get(Localidade, loc_id) else (False, None)
     return (True, loc_id) if loc_id in permitidas else (False, None)
 
 
@@ -526,9 +442,7 @@ def politica_empresa(chave: str, empresa_id=None):
     Nunca explode o fluxo de negócio: chave fora de POLITICAS_PLATAFORMA
     devolve None; empresa sem linha gravada, OU valor que falha o cast do tipo
     declarado, degradam pro default do registry. empresa_id opcional — sem
-    argumento resolve a empresa da sessão (mesmo critério de
-    empresa_para_escrita: Owner impersonando aplica a política do tenant
-    impersonado; sem tenant nenhum, cai direto no default).
+    argumento resolve a empresa da sessão; sem empresa, cai direto no default.
     """
     from app.models import EmpresaPolitica, POLITICAS_PLATAFORMA
     if chave not in POLITICAS_PLATAFORMA:
@@ -703,67 +617,95 @@ def t(chave: str, lang: str = None, **kwargs) -> str:
 
 
 # ---------------------------------------------------------------------------
-# INICIALIZAÇÃO
+# SENHA E PRIMEIRO ACESSO
 # ---------------------------------------------------------------------------
 
-def _senha_do_admin():
-    """Senha do admin de bootstrap: do ambiente, ou sorteada e anunciada no log.
+SENHA_MINIMA = 8
 
-    Nunca fixa no código: uma senha publicada no fonte é a senha de toda
-    instalação que alguém esqueceu de trocar.
 
-    Sem `MBASSETS_ADMIN_SENHA` a senha é sorteada, e aí ela PRECISA aparecer no
-    log — é a única via de entrada num banco recém-criado. Fica em uma linha
-    isolada e berrante de propósito: quem instala lê o log do primeiro boot.
+def problema_na_senha(senha, confirmacao=None):
+    """A frase que explica por que a senha não serve, ou None se ela serve.
+
+    Um lugar só para a política: criação de usuário, troca no perfil, troca
+    obrigatória e primeiro acesso. Política espalhada diverge na primeira vez
+    que alguém mudar só um dos lugares.
     """
-    import os
-    import secrets
-
-    do_ambiente = os.environ.get('MBASSETS_ADMIN_SENHA')
-    if do_ambiente:
-        return do_ambiente
-
-    sorteada = secrets.token_urlsafe(12)
-    print('=' * 70)
-    print(f'[SEED] Senha do admin de bootstrap (admin@mbassets.local): {sorteada}')
-    print('[SEED] Anote agora — ela nao volta a ser exibida. Troque no primeiro acesso.')
-    print('=' * 70)
-    return sorteada
+    if not senha or len(senha) < SENHA_MINIMA:
+        return f'A senha precisa ter pelo menos {SENHA_MINIMA} caracteres.'
+    if confirmacao is not None and senha != confirmacao:
+        return 'As senhas não coincidem.'
+    return None
 
 
-def cria_usuario_admin():
-    """Cria usuário admin padrão (TI_MASTER) se o banco estiver vazio.
+# O token do primeiro acesso mora num arquivo dentro de instance/, nunca no
+# banco nem no código: ele só existe enquanto a instalação não tem usuário, e
+# some no instante em que o administrador é criado.
+PRIMEIRO_ACESSO_ARQUIVO = os.path.join(INSTANCE_FOLDER, 'primeiro_acesso.token')
 
-    Chamada uma única vez no bootstrap da aplicação (run.py ou seed). Só age
-    se não houver nenhum usuário cadastrado, então é seguro chamar em todo start.
 
-    O guard explícito para TI_MASTER é importante: se a seed de grupos não rodou,
-    não faz sentido criar um admin sem grupo — ele ficaria sem permissões e
-    causaria comportamento indefinido no sistema de RBAC. Abortar com log é mais
-    seguro do que criar um usuário órfão.
+def instalacao_sem_usuario() -> bool:
+    from app.models import Usuario
+    return Usuario.query.first() is None
+
+
+def preparar_primeiro_acesso():
+    """Garante o token do primeiro acesso e devolve-o — ou None se já há usuário.
+
+    🔴 Por que token e não uma tela aberta: entre ligar o serviço e a TI abrir o
+    navegador, qualquer pessoa na rede que chegasse antes criaria o próprio
+    administrador. O token só aparece no log do servidor, que só quem instala lê.
+    E nenhuma senha passa pelo log: quem abre o endereço escolhe a sua.
+
+    O mesmo token vale até ser usado (reinício não gera outro), para o endereço
+    anotado no primeiro boot continuar funcionando.
     """
-    from app.models import Usuario, Grupo
-    if not Usuario.query.first():
-        grupo_ti_master = Grupo.query.filter_by(nome='TI_MASTER').first()
-        if not grupo_ti_master:
-            # Se chegou aqui sem o grupo TI_MASTER, a seed de permissões não rodou.
-            # Não criamos admin sem grupo — seria um estado inválido no sistema.
-            print("[ERRO] cria_usuario_admin: grupo TI_MASTER não encontrado. Seed não rodou corretamente.")
-            return
-        admin = Usuario(
-            nome='Administrador TI',
-            re='admin',
-            senha_hash=generate_password_hash(_senha_do_admin(), method='scrypt'),
-            grupo_id=grupo_ti_master.id,
-            # GLOBAL: o admin de bootstrap precisa enxergar tudo. Sem isso ele cai
-            # no default 'CD' sem localidade → get_filtro_localidade() devolve [] e
-            # os módulos que tratam [] como "sem acesso" (coletores) mostram zero.
-            nivel_acesso='GLOBAL',
-            # T2 — login é por e-mail: sem um endereço de bootstrap ninguém
-            # consegue entrar num banco novo.
-            email='admin@mbassets.local',
-            is_owner=True,
-        )
-        db.session.add(admin)
-        db.session.commit()
-        print("[INIT] Usuário admin criado com grupo TI_MASTER.")
+    if not instalacao_sem_usuario():
+        if os.path.exists(PRIMEIRO_ACESSO_ARQUIVO):
+            os.remove(PRIMEIRO_ACESSO_ARQUIVO)
+        return None
+    if os.path.exists(PRIMEIRO_ACESSO_ARQUIVO):
+        with open(PRIMEIRO_ACESSO_ARQUIVO, encoding='utf-8') as fh:
+            token = fh.read().strip()
+        if token:
+            return token
+    token = secrets.token_urlsafe(24)
+    with open(PRIMEIRO_ACESSO_ARQUIVO, 'w', encoding='utf-8') as fh:
+        fh.write(token)
+    return token
+
+
+def token_primeiro_acesso_confere(token) -> bool:
+    """O token recebido é o da instalação — e ainda não há usuário nenhum."""
+    import hmac
+    if not token or not instalacao_sem_usuario():
+        return False
+    if not os.path.exists(PRIMEIRO_ACESSO_ARQUIVO):
+        return False
+    with open(PRIMEIRO_ACESSO_ARQUIVO, encoding='utf-8') as fh:
+        esperado = fh.read().strip()
+    return bool(esperado) and hmac.compare_digest(esperado, token)
+
+
+def criar_administrador(nome, email, senha, re='admin'):
+    """Cria o primeiro usuário: perfil TI, nível GLOBAL, na empresa da instalação.
+
+    A senha foi escolhida pelo próprio dono, então NÃO é provisória. Consome o
+    token do primeiro acesso.
+    """
+    from app.models import Usuario, Grupo, Empresa
+    from app.startup import PERFIL_ADMIN
+    empresa = Empresa.query.order_by(Empresa.id).first()
+    perfil = Grupo.query.filter_by(nome=PERFIL_ADMIN, empresa_id=empresa.id).first()
+    admin = Usuario(
+        nome=nome, re=re, email=normalizar_email(email),
+        senha_hash=generate_password_hash(senha, method='scrypt'),
+        grupo_id=perfil.id, empresa_id=empresa.id,
+        # GLOBAL: o administrador precisa enxergar todos os CDs. Sem isso ele
+        # cairia no default 'CD' sem localidade e veria zero em todo módulo.
+        nivel_acesso='GLOBAL',
+    )
+    db.session.add(admin)
+    db.session.commit()
+    if os.path.exists(PRIMEIRO_ACESSO_ARQUIVO):
+        os.remove(PRIMEIRO_ACESSO_ARQUIVO)
+    return admin

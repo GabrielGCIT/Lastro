@@ -69,18 +69,6 @@
     </div>
     {% endif %}
 
-    {# O catálogo é POR EMPRESA — informação só para quem alterna entre tenants. #}
-    {% if empresa_do_catalogo and session.get('is_owner') %}
-    <div class="alert alert-info d-flex align-items-center py-2 mb-3">
-        <i class="fa-solid fa-building me-2"></i>
-        <div class="small">
-            {{ t('complementos.escopo_empresa') }}
-            <strong>{{ empresa_do_catalogo.nome }}</strong>.
-            {{ t('complementos.escopo_aviso') }}
-        </div>
-    </div>
-    {% endif %}
-
     {# ── Barra de filtros ── #}
     <form method="GET" action="{{ url_for('complementos.index') }}" class="card card-custom p-3 mb-3">
         <div class="row g-2 align-items-end">

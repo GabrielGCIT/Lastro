@@ -1,0 +1,35 @@
+{% extends "base_cartao.html" %}
+{% block title %}{{ t('primeiro.titulo') }}{% endblock %}
+{% block content %}
+<h1>{{ t('primeiro.titulo') }}</h1>
+<p class="subtitle">{{ t('primeiro.instrucao') }}</p>
+
+<form action="{{ url_for('auth.primeiro_acesso', token=token) }}" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="mb-3">
+        <label class="form-label" for="nome">{{ t('label.nome') }}</label>
+        <input type="text" class="form-control" id="nome" name="nome" maxlength="100"
+               value="{{ request.form.get('nome', '') }}" required autofocus>
+    </div>
+    <div class="mb-3">
+        <label class="form-label" for="email">{{ t('primeiro.email') }}</label>
+        <input type="email" class="form-control" id="email" name="email" maxlength="120"
+               value="{{ request.form.get('email', '') }}" required autocomplete="username">
+        <div class="form-text">{{ t('primeiro.email_dica') }}</div>
+    </div>
+    <div class="mb-3">
+        <label class="form-label" for="senha">{{ t('label.senha') }}</label>
+        <input type="password" class="form-control" id="senha" name="senha"
+               minlength="{{ senha_minima }}" required autocomplete="new-password">
+        <div class="form-text">{{ t('senha.regra', n=senha_minima) }}</div>
+    </div>
+    <div class="mb-4">
+        <label class="form-label" for="senha_confirmacao">{{ t('primeiro.confirmar') }}</label>
+        <input type="password" class="form-control" id="senha_confirmacao" name="senha_confirmacao"
+               minlength="{{ senha_minima }}" required autocomplete="new-password">
+    </div>
+    <button type="submit" class="btn-acao">
+        <i class="fa-solid fa-user-shield me-2"></i>{{ t('primeiro.btn_criar') }}
+    </button>
+</form>
+{% endblock %}

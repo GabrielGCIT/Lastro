@@ -315,6 +315,15 @@
                 {% endif %}
             {% endwith %}
 
+            {% if sem_usuario %}
+            {# Instalação nova: ainda não existe quem autenticar. O administrador
+               é criado pelo endereço de primeiro acesso, que só aparece no log do
+               servidor — de propósito, para ninguém na rede chegar antes da TI. #}
+            <div class="alert alert-info border-0 rounded-3 small">
+                <div class="fw-bold mb-1"><i class="fa-solid fa-circle-info me-1"></i>{{ t('primeiro.login_titulo') }}</div>
+                {{ t('primeiro.login_texto') }}
+            </div>
+            {% else %}
             <form action="{{ url_for('auth.login') }}" method="POST">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
@@ -348,6 +357,7 @@
                 </div>
 
             </form>
+            {% endif %}
 
             <div class="form-footer">
                 {{ t('login.rodape') }}

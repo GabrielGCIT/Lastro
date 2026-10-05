@@ -34,7 +34,6 @@ def _nova_empresa(nome='Acme Logística'):
 def test_boot_cria_a_empresa(app):
     mb = _empresa_mb()
     assert mb is not None
-    assert mb.ativa is True
 
 
 def test_backfill_vincula_registros_existentes(app):
@@ -105,10 +104,10 @@ def test_re_colaborador_composto_por_empresa(app):
 
 def test_nome_grupo_igual_em_empresas_diferentes_permitido(app):
     outra = _nova_empresa()
-    db.session.add(Grupo(nome='TI_MASTER', empresa_id=outra.id,
-                         descricao='TI_MASTER do outro tenant'))
+    db.session.add(Grupo(nome='TI', empresa_id=outra.id,
+                         descricao='TI do outro tenant'))
     db.session.commit()
-    assert Grupo.query.filter_by(nome='TI_MASTER').count() == 2
+    assert Grupo.query.filter_by(nome='TI').count() == 2
 
 
 def test_sigla_localidade_composta_por_empresa(app):

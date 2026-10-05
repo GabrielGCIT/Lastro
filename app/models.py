@@ -121,7 +121,6 @@ class Empresa(db.Model):
     get_filtro_localidade). Com uma empresa só ele é invisível; arrancá-lo seria
     mexer no filtro que governa todas as consultas sem ganho para quem usa.
 
-    ativa=False suspende o acesso sem apagar dados.
     """
     __tablename__ = 'empresas'
     __table_args__ = (
@@ -129,7 +128,6 @@ class Empresa(db.Model):
     )
     id            = db.Column(db.Integer,     primary_key=True)
     nome          = db.Column(db.String(150), nullable=False)
-    ativa         = db.Column(db.Boolean,     nullable=False, default=True, server_default='1')
     data_cadastro = db.Column(db.DateTime,    default=datetime.now)
 
 
@@ -409,16 +407,16 @@ grupo_permissoes = db.Table(
 class Grupo(db.Model):
     """Perfil de acesso — agrupa um conjunto de permissões atribuíveis a usuários."""
     __tablename__ = 'grupos'
-    # T1 — nome único POR empresa (cada tenant tem seu próprio TI_MASTER, GERENTE…).
-    # empresa_id nullable para retrocompatibilidade; backfill no seed_empresa().
+    # Nome único POR empresa. empresa_id nullable só para o primeiro boot
+    # (backfill no seed_empresa()).
     __table_args__ = (
         db.UniqueConstraint('empresa_id', 'nome', name='uq_grupos_empresa_nome'),
     )
     id         = db.Column(db.Integer, primary_key=True)
     empresa_id = db.Column(db.Integer, db.ForeignKey('empresas.id'), nullable=True)
-    nome       = db.Column(db.String(30),  nullable=False)   # 'TI_MASTER', 'GERENTE'…
+    nome       = db.Column(db.String(30),  nullable=False)   # 'TI', 'SUPERVISOR', 'BALCAO', 'CONSULTA'
     descricao  = db.Column(db.String(200))
-    protegido  = db.Column(db.Boolean, default=False, nullable=False)     # TI_MASTER não editável pela UI
+    protegido  = db.Column(db.Boolean, default=False, nullable=False)     # perfil do sistema
 
     # lazy='select' carrega as permissões sob demanda (query separada quando acessado).
     # Para listas pequenas de permissões como essa, é o comportamento adequado —
@@ -443,7 +441,7 @@ class Permissao(db.Model):
 
 
 class Usuario(db.Model):
-    """Representa um operador do sistema — pode ser criado pela TI ou via API mobile."""
+    """Quem entra no sistema. Criado pela TI (ou no primeiro acesso, o administrador)."""
     __tablename__ = 'usuarios'
     # T1 — RE vira matrícula interna, única POR empresa (o login global passa a
     # ser por e-mail no T2). empresa_id nullable; backfill no seed_empresa().
@@ -458,19 +456,12 @@ class Usuario(db.Model):
     grupo_id    = db.Column(db.Integer, db.ForeignKey('grupos.id'), nullable=True)
     localidade_id = db.Column(db.Integer, db.ForeignKey('localidades.id'), nullable=True)
     localidade    = db.relationship('Localidade', foreign_keys=[localidade_id], lazy='select')
-    # T2 — e-mail é a credencial de login (único GLOBAL, validado app-level como
-    # numero_serie: constraint de banco conflitaria com múltiplos NULLs no SQL
-    # Server, e quem não loga — OPERADOR — não precisa de e-mail). Sempre
-    # normalizado (lower/strip) no save; o lookup do login usa lower() p/ cobrir
-    # valores legados gravados antes da normalização.
+    # T2 — e-mail é a credencial de login (único, validado app-level). Sempre
+    # normalizado (lower/strip) no save; o lookup do login usa lower().
     email       = db.Column(db.String(120), nullable=True)
     telefone    = db.Column(db.String(30),  nullable=True)
     foto_perfil      = db.Column(db.String(255), nullable=True)
     foto_cracha      = db.Column(db.String(255), nullable=True)
-    # Flag que indica usuários cadastrados pelo app mobile (coletores de campo),
-    # sem passar pelo fluxo de aprovação da TI. Serve como sinalizador para revisão
-    # posterior: a TI precisa confirmar o grupo e as permissões desses usuários.
-    criado_em_campo  = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     # P2 — Câmara e turno operacional do colaborador
     camara           = db.Column(db.String(15), nullable=True)  # SECO | RESFRIADO | CONGELADO
     turno            = db.Column(db.String(5),  nullable=True)  # T1 | T2 | T3
@@ -486,16 +477,10 @@ class Usuario(db.Model):
     # cor_acento: hex #RRGGBB de uma paleta CURADA (contraste AA garantido). Nullable → verde da marca.
     tema             = db.Column(db.String(10), nullable=True)  # light | dark | auto
     cor_acento       = db.Column(db.String(7),  nullable=True)  # #RRGGBB
-    # T2 — Identidade multi-empresa
-    # is_owner: dono da PLATAFORMA, acima das empresas (CRUD de tenants,
-    # entitlements, impersonation auditada no T4). Não confundir com TI_MASTER,
-    # que é o admin DE UMA empresa. Owner ignora o bloqueio de empresa inativa.
-    is_owner              = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
-    # Reset de senha: o token enviado por e-mail NUNCA é gravado em claro —
-    # só o sha256 (vazamento do banco não vira account takeover). Uso único:
-    # os dois campos são limpos ao redefinir a senha.
-    reset_token_hash      = db.Column(db.String(64), nullable=True)
-    reset_token_expira    = db.Column(db.DateTime,   nullable=True)
+    # Senha definida por OUTRA pessoa (a TI, ao criar ou redefinir) é provisória:
+    # até o dono trocar, o sistema só deixa abrir a tela de troca. Quem conhece a
+    # senha de alguém não deveria poder agir como ele.
+    senha_provisoria        = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
     # Lockout de brute force: contador de falhas dentro da janela temporal +
     # instante do bloqueio. Zerados no login bem-sucedido e no reset de senha.
     login_tentativas        = db.Column(db.Integer,  nullable=False, default=0, server_default='0')
@@ -504,8 +489,6 @@ class Usuario(db.Model):
     # Relationships de escopo geográfico — usados na tela de gestão de usuários
     pais             = db.relationship('Pais',    foreign_keys=[pais_id],    lazy='select')
     america          = db.relationship('America', foreign_keys=[america_id], lazy='select')
-    # T2 — empresa do usuário: carregada na sessão no login e usada no bloqueio
-    # de tenant inativo (joinedload no _sync_permissoes evita query extra).
     empresa          = db.relationship('Empresa', foreign_keys=[empresa_id], lazy='select')
 
 
@@ -725,36 +708,6 @@ class ChecklistEntrega(db.Model):
 
     movimentacao = db.relationship('Movimentacao', backref=db.backref('checklist', uselist=False))
     coletor      = db.relationship('Coletor', backref='checklists')
-
-
-class GrupoDeletado(db.Model):
-    """Registro permanente de grupos padrão excluídos intencionalmente via UI.
-
-    O seed de boot consulta esta tabela antes de recriar grupos ausentes —
-    se o nome estiver aqui, o grupo foi deletado conscientemente e não volta.
-    Isso permite que o DB seja a fonte de verdade para quais grupos existem,
-    sem depender do código para recriá-los a cada reinicialização.
-
-    Somente grupos que existem em GRUPOS_DEFAULTS são registrados aqui —
-    grupos criados manualmente pela UI simplesmente somem quando deletados,
-    sem precisar de rastreamento porque o seed nunca tentaria recriá-los.
-
-    T4a — a deleção passa a ser POR EMPRESA: a PK deixa de ser o `nome` global
-    (que fazia o tenant B, ao excluir GERENTE, matar o seed do GERENTE de TODOS
-    os tenants) e vira um id surrogate, com o par (empresa_id, nome) único. O
-    registro legado (empresa_id NULL) é migrado para a MB no boot. empresa_id
-    nullable só para o instante do bootstrap (grupos órfãos vinculados à MB pelo
-    seed_empresa) — em produção todo registro é escopado.
-    """
-    __tablename__ = 'grupos_deletados'
-    __table_args__ = (
-        db.UniqueConstraint('empresa_id', 'nome', name='uq_grupos_deletados_empresa_nome'),
-    )
-    id           = db.Column(db.Integer, primary_key=True)
-    empresa_id   = db.Column(db.Integer, db.ForeignKey('empresas.id'), nullable=True)
-    nome         = db.Column(db.String(30), nullable=False)
-    deletado_por = db.Column(db.String(100))
-    data_delecao = db.Column(db.DateTime, default=datetime.now)
 
 
 class ReativacaoIdentificacao(db.Model):

@@ -35,10 +35,6 @@
        href="{{ url_for('coletores.gerenciar_localidades') }}">
         <i class="fa-solid fa-location-dot"></i> {{ t('nav.localidades') }}
     </a>
-    <a class="sidebar-link {{ 'active' if request.endpoint == 'coletores.gerenciar_paises' else '' }}"
-       href="{{ url_for('coletores.gerenciar_paises') }}">
-        <i class="fa-solid fa-globe"></i> {{ t('nav.paises') }}
-    </a>
     {% endif %}
 
     {% if has_permissao('admin.colaboradores') %}

@@ -22,14 +22,15 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from app import db, FOTO_FOLDER, CRACHA_FOLDER, ALLOWED_IMG_EXTENSIONS
 from app.models import (Coletor, Movimentacao, LogAuditoria,
-                        Usuario, Localidade, Grupo, Permissao, GrupoDeletado, America,
+                        Usuario, Localidade, Grupo, Permissao, America,
                         Pais, STATUS_FORA_DE_OPERACAO, STATUS_INDISPONIVEIS)
-from app.helpers import (login_required, permissao_required, has_permissao, registrar_log,
+from app.helpers import (login_required, permissao_required, registrar_log,
                          get_filtro_localidade, empresa_visivel, criterio_empresa,
                          empresa_para_escrita, localidade_para_escrita, re_usuario_em_uso,
                          tema_seguro, cor_acento_segura,
                          CORES_ACENTO_SELECIONAVEIS,
-                         normalizar_email, email_valido, email_em_uso)
+                         normalizar_email, email_valido, email_em_uso, problema_na_senha,
+                         SENHA_MINIMA)
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
@@ -81,15 +82,6 @@ def index():
     else:
         ultimas = []
 
-    # Contador de contas criadas via mobile (tela de movimentação) que ainda
-    # não passaram pela revisão da TI. Alimenta o alerta no topo do dashboard
-    # para que o time de TI não esqueça de validar esses cadastros.
-    # S3/família C — contagem por empresa: sem o filtro, o alerta somava contas
-    # pendentes de TODOS os tenants (e apontava para uma listagem já escopada).
-    usuarios_campo_q = (Usuario.query.filter_by(criado_em_campo=True)
-                        .filter(criterio_empresa(Usuario.empresa_id)))
-    usuarios_campo = usuarios_campo_q.count()
-
     # P7 — Resumo por localidade para usuários acima de CD (dashboard consolidado)
     nivel = session.get('nivel_acesso', 'CD')
     localidades_resumo = []
@@ -130,7 +122,6 @@ def index():
                            total=total, disponiveis=disponiveis,
                            em_uso=em_uso, manutencao=manutencao,
                            movimentacoes=ultimas,
-                           usuarios_campo=usuarios_campo,
                            localidades_resumo=localidades_resumo)
 
 
@@ -484,10 +475,8 @@ def perfil():
             senha_conf  = request.form.get('senha_confirmacao', '')
             if not check_password_hash(user.senha_hash, senha_atual):
                 flash('Senha atual incorreta.', 'danger')
-            elif len(senha_nova) < 6:
-                flash('A nova senha deve ter pelo menos 6 caracteres.', 'danger')
-            elif senha_nova != senha_conf:
-                flash('As senhas não coincidem.', 'danger')
+            elif problema_na_senha(senha_nova, senha_conf):
+                flash(problema_na_senha(senha_nova, senha_conf), 'danger')
             else:
                 user.senha_hash = generate_password_hash(senha_nova, method='scrypt')
                 db.session.commit()
@@ -538,7 +527,7 @@ def api_usuario_por_re(re_busca):
     # criterio_empresa é fail-closed de verdade: não-owner sem empresa_id na
     # sessão devolve db.false() (zero linhas), não IS NULL — que casaria com os
     # órfãos. Esta rota está sob /api/ e o _sync_permissoes a ignora, mas
-    # empresa_id/is_owner já vêm da sessão do login (o cache que has_permissao usa).
+    # empresa_id já vem da sessão do login (o cache que has_permissao usa).
     q = Usuario.query.filter_by(re=re_busca).filter(criterio_empresa(Usuario.empresa_id))
     user = q.first()
     if not user:
@@ -714,7 +703,7 @@ def trocar_contexto():
     # T3 — recorte por empresa vale ATÉ para GLOBAL (que é global DA empresa,
     # não do banco). Só o Owner cruza tenants. Um CD de outra empresa aqui é
     # tentativa de acesso cross-tenant — recusa e registra.
-    if not session.get('is_owner') and not _contexto_na_empresa(novo_ctx):
+    if not _contexto_na_empresa(novo_ctx):
         registrar_log(
             'SECURITY_ALERT',
             f'{session.get("re")} tentou trocar contexto para "{novo_ctx}" '
@@ -819,274 +808,29 @@ def exportar_excel():
 @dashboard_bp.route('/grupos', methods=['GET'])
 @permissao_required('admin.grupos')
 def gerenciar_grupos():
-    """
-    Tela de gestão de grupos e permissões — exclusivo para TI_MASTER ('admin.grupos').
+    """O que cada um dos quatro perfis pode fazer — tela SÓ DE CONSULTA.
 
-    Exibe todos os grupos com suas permissões atuais agrupadas por módulo.
-    Grupos protegidos (TI_MASTER) são somente leitura. Para os demais, o TI_MASTER
-    pode editar as permissões via modal com checkboxes.
-
-    As permissões são agrupadas por módulo em Python (não no template) para
-    manter o template limpo. O dict modulos preserva a ordem de inserção do
-    Python 3.7+ — na ordem em que os módulos aparecem nas permissões.
+    Os perfis são fixos (startup.GRUPOS_DEFAULTS) e o seed os impõe a cada boot.
+    A tela existe para a TI escolher o perfil certo ao criar um usuário, não
+    para redistribuir permissões.
     """
-    # S3/família C + T4a — leitura escopada por empresa (fail-closed); Owner vê todos.
-    grupos = (Grupo.query.filter(criterio_empresa(Grupo.empresa_id))
-              .order_by(Grupo.id).all())
-    permissoes = Permissao.query.order_by(Permissao.modulo, Permissao.codigo).all()
+    from app.startup import GRUPOS_DEFAULTS, TODAS_PERMISSOES
+    ordem = list(GRUPOS_DEFAULTS)
+    grupos = sorted(Grupo.query.filter(criterio_empresa(Grupo.empresa_id)).all(),
+                    key=lambda g: ordem.index(g.nome) if g.nome in ordem else len(ordem))
+    # A ordem de leitura é a da declaração (operação → consulta → administração),
+    # não a alfabética: quem compara perfis começa pelo trabalho do dia a dia.
+    ordem_perm = [c for c, _, _ in TODAS_PERMISSOES]
+    permissoes = sorted(Permissao.query.all(),
+                        key=lambda p: ordem_perm.index(p.codigo) if p.codigo in ordem_perm else len(ordem_perm))
 
     modulos = {}
     for p in permissoes:
         modulos.setdefault(p.modulo, []).append(p)
 
     usuarios_por_grupo = {g.id: len(g.usuarios) for g in grupos}
-    # T4a — os deletados também são por empresa: sem o escopo, o tenant veria
-    # (e restauraria) grupos que outro tenant excluiu.
-    grupos_deletados = (GrupoDeletado.query
-                        .filter(criterio_empresa(GrupoDeletado.empresa_id))
-                        .order_by(GrupoDeletado.data_delecao.desc()).all())
-
-    return render_template(
-        'grupos.html',
-        grupos=grupos,
-        modulos=modulos,
-        usuarios_por_grupo=usuarios_por_grupo,
-        grupos_deletados=grupos_deletados,
-    )
-
-
-@dashboard_bp.route('/grupos/<nome>/restaurar', methods=['POST'])
-@permissao_required('admin.grupos')
-def restaurar_grupo(nome):
-    """
-    Restaura um grupo padrão que foi explicitamente deletado via UI.
-
-    Fluxo:
-      1. Valida que é um grupo padrão (existe em GRUPOS_DEFAULTS)
-      2. Valida que está registrado em GrupoDeletado
-      3. Recria o Grupo com permissões e descrição padrão do GRUPOS_DEFAULTS
-      4. Remove o registro de GrupoDeletado (seed pode ignorá-lo no próximo boot)
-
-    Permissões restauradas vêm sempre do GRUPOS_DEFAULTS — não há backup das
-    permissões anteriores à exclusão. Se o grupo havia sido editado via UI
-    antes de ser deletado, essas customizações são perdidas.
-
-    O caso de estado inconsistente (grupo já existe no banco mas ainda está em
-    GrupoDeletado) é tratado graciosamente: apenas limpa o registro de deletado.
-    """
-    from app.startup import GRUPOS_DEFAULTS
-
-    if nome not in GRUPOS_DEFAULTS:
-        flash(f'"{nome}" não é um grupo padrão e não pode ser restaurado.', 'danger')
-        return redirect(url_for('dashboard.gerenciar_grupos'))
-
-    # S1/família A — o grupo restaurado nasce carimbado com o tenant da sessão,
-    # como em criar_grupo. Sem o carimbo ele nascia órfão: invisível na listagem
-    # escopada (S3) até o backfill do próximo boot o mandar para a MB — que pode
-    # nem ser a empresa de quem restaurou.
-    empresa_id = empresa_para_escrita()
-    if empresa_id is None:
-        flash('Escolha uma empresa no topo da tela para restaurar um grupo.', 'warning')
-        return redirect(url_for('dashboard.gerenciar_grupos'))
-
-    # T4a — o registro de deleção é por (empresa_id, nome); a PK deixou de ser
-    # o nome global. Busca o da empresa da sessão.
-    registro = GrupoDeletado.query.filter_by(empresa_id=empresa_id, nome=nome).first()
-    if not registro:
-        flash(f'O grupo {nome.replace("_", " ")} não está na lista de grupos desativados.', 'warning')
-        return redirect(url_for('dashboard.gerenciar_grupos'))
-
-    # Estado inconsistente: grupo já existe mas o registro de deletado não foi limpo.
-    # Resolve silenciosamente para não travar a interface. O check é por empresa
-    # (uq_grupos_empresa_nome) — um homônimo de outro tenant não conta como "já existe".
-    if Grupo.query.filter_by(empresa_id=empresa_id, nome=nome).first():
-        db.session.delete(registro)
-        db.session.commit()
-        flash(f'Grupo {nome.replace("_", " ")} já existe. Registro de desativação removido.', 'info')
-        return redirect(url_for('dashboard.gerenciar_grupos'))
-
-    cfg = GRUPOS_DEFAULTS[nome]
-    codigos = cfg.get('permissoes', [])
-    permissoes = Permissao.query.filter(Permissao.codigo.in_(codigos)).all() if codigos else []
-
-    novo = Grupo(nome=nome, descricao=cfg['descricao'], protegido=cfg['protegido'],
-                 empresa_id=empresa_id)
-    novo.permissoes = permissoes
-    db.session.add(novo)
-    db.session.delete(registro)
-
-    registrar_log(
-        'GRUPO_RESTAURADO',
-        f'Grupo "{nome}" restaurado por {session.get("nome")} '
-        f'com {len(permissoes)} permissão(ões) padrão.'
-    )
-    db.session.commit()
-
-    flash(f'Grupo {nome.replace("_", " ")} restaurado com as permissões padrão.', 'success')
-    return redirect(url_for('dashboard.gerenciar_grupos'))
-
-
-@dashboard_bp.route('/grupos/criar', methods=['POST'])
-@permissao_required('admin.grupos')
-def criar_grupo():
-    """
-    Cria um novo grupo com nome, descrição e permissões iniciais.
-
-    O nome é normalizado para maiúsculas com underscores — padrão de todos os
-    grupos do sistema. A validação rejeita nomes com caracteres especiais para
-    evitar problemas no seed e na UI.
-    """
-    nome_raw  = request.form.get('nome', '').strip().upper().replace(' ', '_')
-    descricao = request.form.get('descricao', '').strip() or None
-
-    if not nome_raw:
-        flash('Nome do grupo é obrigatório.', 'danger')
-        return redirect(url_for('dashboard.gerenciar_grupos'))
-
-    if not all(c.isalpha() or c.isdigit() or c == '_' for c in nome_raw):
-        flash('Nome deve conter apenas letras, números e underscore.', 'danger')
-        return redirect(url_for('dashboard.gerenciar_grupos'))
-
-    if len(nome_raw) > 30:
-        flash('Nome deve ter no máximo 30 caracteres.', 'danger')
-        return redirect(url_for('dashboard.gerenciar_grupos'))
-
-    # S1/família A — o grupo nasce carimbado com o tenant da sessão (cada empresa
-    # tem seu próprio TI_MASTER/GERENTE); sem tenant, a criação é bloqueada.
-    empresa_id = empresa_para_escrita()
-    if empresa_id is None:
-        flash('Escolha uma empresa no topo da tela para criar um grupo.', 'warning')
-        return redirect(url_for('dashboard.gerenciar_grupos'))
-
-    # S1/família D — nome único POR empresa (constraint uq_grupos_empresa_nome).
-    if Grupo.query.filter_by(empresa_id=empresa_id, nome=nome_raw).first():
-        flash(f'Já existe um grupo com o nome "{nome_raw}".', 'danger')
-        return redirect(url_for('dashboard.gerenciar_grupos'))
-
-    ids_raw      = request.form.getlist('permissao_ids')
-    ids_validos  = [int(i) for i in ids_raw if i.isdigit()]
-    permissoes   = Permissao.query.filter(Permissao.id.in_(ids_validos)).all() if ids_validos else []
-
-    novo = Grupo(nome=nome_raw, descricao=descricao, protegido=False, empresa_id=empresa_id)
-    novo.permissoes = permissoes
-    db.session.add(novo)
-
-    registrar_log(
-        'GRUPO_CREATE',
-        f'Grupo "{nome_raw}" criado por {session.get("nome")} com {len(permissoes)} permissão(ões).'
-    )
-    db.session.commit()
-
-    flash(f'Grupo {nome_raw.replace("_", " ")} criado com sucesso.', 'success')
-    return redirect(url_for('dashboard.gerenciar_grupos'))
-
-
-@dashboard_bp.route('/grupos/<int:grupo_id>/excluir', methods=['POST'])
-@permissao_required('admin.grupos')
-def excluir_grupo(grupo_id):
-    """
-    Exclui um grupo sem usuários vinculados.
-
-    Grupos protegidos e grupos com usuários ativos são bloqueados — sem
-    exceção, mesmo via POST manual. Um grupo com usuários que fosse excluído
-    deixaria esses usuários sem grupo_id, quebrando o acesso ao sistema.
-    """
-    # S2/família B — grupo de outro tenant é tratado como inexistente.
-    grupo = db.session.get(Grupo, grupo_id)
-    if not grupo or not empresa_visivel(grupo.empresa_id):
-        flash('Grupo não encontrado.', 'danger')
-        return redirect(url_for('dashboard.gerenciar_grupos'))
-
-    if grupo.protegido:
-        flash('Grupos protegidos não podem ser excluídos.', 'danger')
-        registrar_log('SECURITY_ALERT',
-                      f'{session.get("re")} tentou excluir o grupo protegido "{grupo.nome}".')
-        return redirect(url_for('dashboard.gerenciar_grupos'))
-
-    if grupo.usuarios:
-        flash(
-            f'O grupo {grupo.nome} possui {len(grupo.usuarios)} usuário(s) vinculado(s). '
-            'Mova ou remova esses usuários antes de excluir o grupo.',
-            'danger'
-        )
-        return redirect(url_for('dashboard.gerenciar_grupos'))
-
-    nome = grupo.nome
-    db.session.delete(grupo)
-
-    # Se for um grupo padrão do sistema, registra na lista de deletados para que
-    # o seed de boot não o recrie. Grupos criados manualmente via UI não precisam
-    # desse registro — o seed nunca tentaria recriá-los de qualquer forma.
-    from app.startup import GRUPOS_DEFAULTS
-    if nome in GRUPOS_DEFAULTS:
-        # T4a — deleção por empresa: registra o par (empresa, nome). O dedup
-        # também é por empresa (a PK não é mais o nome global), senão o registro
-        # de um tenant bloquearia o de outro.
-        ja_registrado = (GrupoDeletado.query
-                         .filter_by(empresa_id=grupo.empresa_id, nome=nome).first())
-        if not ja_registrado:
-            db.session.add(GrupoDeletado(
-                nome=nome,
-                empresa_id=grupo.empresa_id,
-                deletado_por=session.get('nome'),
-            ))
-
-    registrar_log('GRUPO_DELETE', f'Grupo "{nome}" excluído por {session.get("nome")}.')
-    db.session.commit()
-
-    flash(f'Grupo {nome.replace("_", " ")} excluído com sucesso.', 'success')
-    return redirect(url_for('dashboard.gerenciar_grupos'))
-
-
-@dashboard_bp.route('/grupos/<int:grupo_id>/permissoes', methods=['POST'])
-@permissao_required('admin.grupos')
-def salvar_permissoes_grupo(grupo_id):
-    """
-    Atualiza as permissões de um grupo não-protegido.
-
-    Recebe uma lista de IDs de permissão via checkbox (permissao_ids[]).
-    Se nenhum checkbox marcado, a lista fica vazia — o grupo perde todas as
-    permissões, o que é intencional (ex: grupo temporário sem acesso).
-
-    O log de auditoria registra exatamente o que mudou (adicionadas e removidas)
-    para rastreabilidade. A verificação de protegido no backend garante que
-    um POST manual não consiga alterar TI_MASTER mesmo sem a UI.
-    """
-    # S2/família B — grupo de outro tenant é tratado como inexistente.
-    grupo = db.session.get(Grupo, grupo_id)
-    if not grupo or not empresa_visivel(grupo.empresa_id):
-        flash('Grupo não encontrado.', 'danger')
-        return redirect(url_for('dashboard.gerenciar_grupos'))
-
-    if grupo.protegido:
-        flash('Este grupo é protegido e não pode ser editado pela interface.', 'danger')
-        registrar_log(
-            'SECURITY_ALERT',
-            f'{session.get("re")} tentou editar permissões do grupo protegido {grupo.nome}.'
-        )
-        return redirect(url_for('dashboard.gerenciar_grupos'))
-
-    ids_raw = request.form.getlist('permissao_ids')
-    ids_validos = [int(i) for i in ids_raw if i.isdigit()]
-    novas_permissoes = Permissao.query.filter(Permissao.id.in_(ids_validos)).all() if ids_validos else []
-
-    codigos_antes = {p.codigo for p in grupo.permissoes}
-    codigos_depois = {p.codigo for p in novas_permissoes}
-    adicionadas = codigos_depois - codigos_antes
-    removidas   = codigos_antes - codigos_depois
-
-    grupo.permissoes = novas_permissoes
-
-    registrar_log(
-        'GRUPO_PERM_UPDATE',
-        f'Permissões de "{grupo.nome}" atualizadas por {session.get("nome")}. '
-        f'Adicionadas: {sorted(adicionadas) or "nenhuma"}. '
-        f'Removidas: {sorted(removidas) or "nenhuma"}.'
-    )
-    db.session.commit()
-
-    flash(f'Permissões do grupo {grupo.nome.replace("_", " ")} atualizadas com sucesso.', 'success')
-    return redirect(url_for('dashboard.gerenciar_grupos'))
+    return render_template('grupos.html', grupos=grupos, modulos=modulos,
+                           usuarios_por_grupo=usuarios_por_grupo)
 
 
 @dashboard_bp.route('/auditoria')
@@ -1178,10 +922,10 @@ def gerenciar_usuarios():
       malformados enviados diretamente via form ou ferramentas externas. Sem isso,
       uma string não-numérica no campo grupo_id causaria um ValueError não tratado.
 
-    - A checagem de TI_MASTER é uma camada extra de segurança no backend: mesmo
-      que o frontend esconda a opção para quem não tem 'admin.grupos', um usuário
-      mal-intencionado poderia montar o POST manualmente. O log de SECURITY_ALERT
-      registra tentativas para auditoria posterior.
+    - Senha definida aqui é PROVISÓRIA: o dono troca no próximo login (ver
+      auth.trocar_senha). Vale para a criação e para a redefinição — é o caminho
+      de recuperação de senha do sistema, que não tem servidor de e-mail. A
+      exceção é a própria senha de quem está editando.
 
     A função interna _salvar_foto_cracha evita repetir a lógica de upload tanto
     na criação quanto na edição — vale manter assim enquanto os dois caminhos
@@ -1212,15 +956,25 @@ def gerenciar_usuarios():
             flash('Nome e RE são obrigatórios.', 'danger')
             return redirect(url_for('dashboard.gerenciar_usuarios'))
 
+        # Criar exige senha; editar só valida se uma senha nova veio. Sem isto,
+        # criar sem senha estourava 500 (generate_password_hash(None)).
+        if senha or not user_id:
+            problema = problema_na_senha(senha)
+            if problema:
+                flash(problema, 'danger')
+                return redirect(url_for('dashboard.gerenciar_usuarios'))
+
         if not re.isdigit() or len(re) < 4:
             flash('RE deve conter apenas números e ter pelo menos 4 dígitos.', 'danger')
             return redirect(url_for('dashboard.gerenciar_usuarios'))
 
-        # T2 — e-mail é a credencial de login. Opcional aqui de propósito:
-        # OPERADOR não faz login e fica sem e-mail; para quem loga, é este
-        # campo que o admin preenche na transição RE → e-mail.
         email = normalizar_email(request.form.get('email'))
-        if email and not email_valido(email):
+        # Todo perfil entra no sistema, e entra pelo e-mail: usuário sem e-mail
+        # é um cadastro que não consegue fazer nada.
+        if not email:
+            flash('Informe o e-mail — é com ele que a pessoa entra no sistema.', 'danger')
+            return redirect(url_for('dashboard.gerenciar_usuarios'))
+        if not email_valido(email):
             flash('E-mail em formato inválido.', 'danger')
             return redirect(url_for('dashboard.gerenciar_usuarios'))
         try:
@@ -1238,12 +992,6 @@ def gerenciar_usuarios():
             grupo = None
         if not grupo:
             flash('Erro: Grupo inválido.', 'danger')
-            return redirect(url_for('dashboard.gerenciar_usuarios'))
-
-        # TI não pode atribuir/editar grupo TI_MASTER — só TI_MASTER pode
-        if grupo.nome == 'TI_MASTER' and not has_permissao('admin.grupos'):
-            flash('Apenas TI Master pode atribuir o grupo TI Master.', 'danger')
-            registrar_log('SECURITY_ALERT', f'{session.get("re")} tentou atribuir TI_MASTER a um usuário.')
             return redirect(url_for('dashboard.gerenciar_usuarios'))
 
         try:
@@ -1318,18 +1066,17 @@ def gerenciar_usuarios():
                 user.america_id = None
             if senha:
                 user.senha_hash = generate_password_hash(senha, method='scrypt')
+                # Redefinida pela TI → provisória. A própria senha, não.
+                user.senha_provisoria = user.id != session.get('user_id')
+                user.login_tentativas    = 0
+                user.login_bloqueado_ate = None
             _salvar_foto_cracha(user)
             flash(f'Usuário {nome} atualizado.', 'success')
             registrar_log('USER_UPDATE', f'Usuario {re} alterado por {session.get("nome")} → grupo {grupo.nome}, nível {nivel_acesso}')
         else:
-            # T4c — a empresa do novo usuário é a EFETIVA da sessão (a impersonada,
-            # quando o Owner entra num tenant), não a session['empresa_id'] crua, que
-            # o _sync_permissoes fixa na empresa do próprio Owner a cada request. Sem
-            # isso, o Owner criando dentro de um cliente gravava o usuário na MB —
-            # espelha o que grupos/fornecedores já faziam com empresa_para_escrita().
             empresa_alvo = empresa_para_escrita()
             if empresa_alvo is None:
-                flash('Escolha uma empresa no topo da tela para criar um usuário.', 'warning')
+                flash('Sessão sem empresa. Saia e entre de novo.', 'warning')
                 return redirect(url_for('dashboard.gerenciar_usuarios'))
             # S1/família D — RE (matrícula) único POR empresa; login global é por
             # e-mail (checado acima). RE homônimo em outro tenant não conflita.
@@ -1340,6 +1087,7 @@ def gerenciar_usuarios():
                     nome=nome, re=re,
                     email=email,
                     senha_hash=generate_password_hash(senha, method='scrypt'),
+                    senha_provisoria=True,
                     grupo_id=grupo.id,
                     localidade_id=loc_id if nivel_acesso == 'CD' else None,
                     pais_id=scope_pais_id if nivel_acesso == 'PAIS' else None,
@@ -1359,7 +1107,7 @@ def gerenciar_usuarios():
         return redirect(url_for('dashboard.gerenciar_usuarios'))
 
     from sqlalchemy.orm import selectinload
-    # S3/família C — leitura escopada por empresa (fail-closed); Owner vê todos.
+    # S3/família C — leitura escopada por empresa (fail-closed).
     # Grupos e localidades são os dropdowns do form de criar/editar — vazados,
     # deixariam atribuir um usuário a um grupo/localidade de outro tenant.
     usuarios_q  = Usuario.query.options(
@@ -1369,10 +1117,8 @@ def gerenciar_usuarios():
     )
     grupos_q    = Grupo.query
     ids_permitidos = get_filtro_localidade()
-    if not session.get('is_owner'):
-        empresa_id = session.get('empresa_id')
-        usuarios_q = usuarios_q.filter(Usuario.empresa_id == empresa_id)
-        grupos_q   = grupos_q.filter(Grupo.empresa_id == empresa_id)
+    usuarios_q = usuarios_q.filter(criterio_empresa(Usuario.empresa_id))
+    grupos_q   = grupos_q.filter(criterio_empresa(Grupo.empresa_id))
     if ids_permitidos is None:
         localidades = Localidade.query.order_by(Localidade.sigla).all()
     elif ids_permitidos:
@@ -1383,36 +1129,11 @@ def gerenciar_usuarios():
     grupos      = grupos_q.order_by(Grupo.nome).all()
     americas    = America.query.order_by(America.sigla).all()
     paises      = Pais.query.join(America, Pais.america_id == America.id).order_by(America.sigla, Pais.nome).all()
+    from app.startup import GRUPOS_DEFAULTS
+    ordem = list(GRUPOS_DEFAULTS)
+    grupos = sorted(grupos, key=lambda g: ordem.index(g.nome) if g.nome in ordem else len(ordem))
     return render_template('usuarios.html', usuarios=usuarios, grupos=grupos, localidades=localidades,
-                           americas=americas, paises=paises)
-
-
-@dashboard_bp.route('/usuarios/<int:user_id>/revisar', methods=['POST'])
-@permissao_required('admin.revisar_campo')
-def revisar_usuario(user_id):
-    """
-    Marca um usuário criado em campo como revisado pela TI.
-
-    Simplesmente remove o flag criado_em_campo — isso indica que alguém da TI
-    verificou os dados do cadastro (nome, RE, foto do crachá) e confirmou que
-    está correto. O alerta no dashboard some assim que todos os pendentes forem
-    revisados. Não há alteração de senha, grupo ou qualquer outro campo aqui —
-    a revisão é apenas uma confirmação de que o cadastro foi validado.
-
-    Exige permissão 'admin.revisar_campo' para separar essa responsabilidade
-    de 'admin.usuarios' — é possível dar ao supervisor de TI permissão de revisar
-    sem dar acesso total ao CRUD de usuários.
-    """
-    # S2/família B — usuário de outro tenant é tratado como inexistente.
-    user = db.session.get(Usuario, user_id)
-    if not user or not empresa_visivel(user.empresa_id):
-        flash('Usuário não encontrado.', 'danger')
-        return redirect(url_for('dashboard.gerenciar_usuarios'))
-    user.criado_em_campo = False
-    db.session.commit()
-    registrar_log('USER_REVISADO', f'Conta {user.re} ({user.nome}) marcada como revisada por {session.get("nome")}.')
-    flash(f'Conta de {user.nome} marcada como revisada.', 'success')
-    return redirect(url_for('dashboard.gerenciar_usuarios'))
+                           americas=americas, paises=paises, senha_minima=SENHA_MINIMA)
 
 
 @dashboard_bp.route('/glossario')

@@ -59,22 +59,13 @@
                     <h5 class="fw-bold mb-0">{{ user.nome }}</h5>
                     {% set _grupo_nome = user.grupo.nome if user.grupo else '' %}
                     {% set _gc = {
-                        'TI_MASTER':   'bg-dark',
-                        'TI':          'bg-dark',
-                        'DIRETOR':     'bg-danger',
-                        'GERENTE':     'bg-primary',
-                        'SUPERVISOR':  'bg-info text-dark',
-                        'COORDENADOR': 'bg-info text-dark',
-                        'ANALISTA':    'bg-secondary',
-                        'ESPECIALISTA':'bg-warning text-dark',
-                        'TECNICO':     'bg-warning text-dark',
-                        'LIDER':       'bg-success',
-                        'OPERADOR':    'bg-secondary',
-                        'CONSULTA':    'bg-light text-dark border',
-                        'AUDITOR':     'bg-danger',
+                        'TI':         'bg-dark',
+                        'SUPERVISOR': 'bg-primary',
+                        'BALCAO':     'bg-success',
+                        'CONSULTA':   'bg-light text-dark border',
                     } %}
                     <span class="badge mt-2 {{ _gc.get(_grupo_nome, 'bg-secondary') }}">
-                        {{ _grupo_nome.replace('_', ' ') if _grupo_nome else t('usuarios.sem_grupo') }}
+                        {{ t('perfil.nome.' ~ _grupo_nome) if _grupo_nome else t('usuarios.sem_grupo') }}
                     </span>
                 </div>
             </div>

@@ -167,11 +167,6 @@ def index():
             eq = eq.filter(EstoqueComplemento.localidade_id.in_([l.id for l in localidades]))
         estoques = {(e.categoria_id, e.localidade_id): e.qtd_cadastrada for e in eq.all()}
 
-    # Saber ONDE está cadastrando não é detalhe: o catálogo é por empresa, e
-    # cadastrar na errada faz o complemento nunca aparecer no coletor.
-    from app.models import Empresa
-    empresa = db.session.get(Empresa, empresa_id) if empresa_id else None
-
     return render_template(
         'complementos.html',
         linhas=linhas,
@@ -181,7 +176,6 @@ def index():
         categorias_ativas=[c for c in categorias if c.ativa],
         categorias_quantidade=categorias_quantidade,
         estoques=estoques,
-        empresa_do_catalogo=empresa,
         localidades=localidades,
         filtro_loc=filtro_loc,
         filtro_tipo=filtro_tipo,

@@ -2,8 +2,11 @@
 Blueprint de movimentação de coletores — retirada, devolução e reporte de status.
 
 Controla o fluxo operacional de check-out e check-in dos coletores no CD.
-Todas as rotas exigem login, mas não necessariamente permissão de admin —
-qualquer operador autenticado pode registrar retiradas e devoluções.
+
+🔴 As telas e os POSTs exigem a PERMISSÃO da ação (mov.retirar, mov.devolver,
+inventario.reportar), não só login. Antes a permissão escondia o link do menu e
+a rota aceitava qualquer usuário logado: um perfil de consulta registrava
+retirada com um POST direto.
 
 Ciclo de vida do status de um coletor:
     Disponível → (retirada) → Em Uso → (devolução OK) → Disponível
@@ -58,14 +61,14 @@ def _buscar_coletor_no_escopo(modo, valor):
 
 
 @movimentacao_bp.route('/operacao', methods=['GET'])
-@login_required
+@permissao_required('mov.retirar', 'mov.devolver')
 def operacao_index():
     """Página principal da operação — exibe o formulário de retirada e devolução."""
     return render_template('movimentacao.html', mapa_diagnostico=DIAGNOSTICO_MAPA)
 
 
 @movimentacao_bp.route('/operacao/retirar', methods=['POST'])
-@login_required
+@permissao_required('mov.retirar')
 def realizar_retirada():
     """
     Registra a retirada de um coletor para um colaborador.
@@ -241,7 +244,7 @@ def colaborador_nome_da(mov):
 
 
 @movimentacao_bp.route('/operacao/devolver', methods=['POST'])
-@login_required
+@permissao_required('mov.devolver')
 def realizar_devolucao():
     """
     Registra a devolução de um coletor e atualiza seu status conforme o estado da identificação.
@@ -371,7 +374,7 @@ def realizar_devolucao():
 
 
 @movimentacao_bp.route('/operacao/inventario', methods=['GET', 'POST'])
-@login_required
+@permissao_required('inventario.reportar')
 def operacao_inventario():
     """
     Permite que operadores reportem problemas ou alterem o status de coletores.

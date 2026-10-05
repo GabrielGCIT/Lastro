@@ -2,6 +2,10 @@
 
 {% block title %}Dashboard{% endblock %}
 {% block content %}
+{# Os números do painel levam ao inventário — mas só para quem o abre. Para o
+   Balcão e a Consulta o card é informação: um link que termina em "acesso
+   negado" ensina a não clicar em nada. #}
+{% set pode_inventario = has_permissao('admin.inventario_ativos') %}
 <div class="container-fluid fade-in">
 
     {# ── Cabeçalho ── #}
@@ -22,20 +26,6 @@
         </div>
     </div>
 
-    {# ── Alerta: contas criadas em campo (apenas TI) ── #}
-    {% if has_permissao('admin.revisar_campo') and usuarios_campo > 0 %}
-    <div class="alert alert-info d-flex align-items-center gap-3 mb-3 shadow-sm">
-        <i class="fa-solid fa-user-clock fa-2x text-info"></i>
-        <div class="flex-fill">
-            <strong>{{ usuarios_campo }} conta(s)</strong> {{ t('dashboard.alerta.contas_campo_texto') }}
-            <span class="text-muted small ms-1">{{ t('dashboard.alerta.contas_campo_hint') }}</span>
-        </div>
-        <a href="{{ url_for('dashboard.gerenciar_usuarios') }}" class="btn btn-info btn-sm fw-bold text-white">
-            <i class="fa-solid fa-users me-1"></i>{{ t('dashboard.btn_revisar') }}
-        </a>
-    </div>
-    {% endif %}
-
     {# ── U2: o que precisa de decisão hoje ──────────────────────────────────
        Gestão por exceção: o painel abre pelo que está errado, não pelo que está
        certo. Cada linha leva à lista que a originou — número que não vira ação é
@@ -54,7 +44,7 @@
         </div>
         <div class="list-group list-group-flush">
             {% if total_pendencias %}
-            <a href="{{ url_for('coletores.gerenciar_coletores', pendencia=1) }}"
+            <a {% if pode_inventario %}href="{{ url_for('coletores.gerenciar_coletores', pendencia=1) }}"{% endif %}
                class="list-group-item list-group-item-action d-flex align-items-center gap-3">
                 <span class="badge bg-danger rounded-pill fs-6">{{ total_pendencias }}</span>
                 <span class="flex-fill">{{ t('dashboard.decisao_complementos') }}</span>
@@ -85,10 +75,12 @@
             <strong class="flex-fill">
                 {{ t('pendcomp.dash_titulo') }} — {{ total_pendencias }} {{ t('pendcomp.itens') }}
             </strong>
-            <a href="{{ url_for('coletores.gerenciar_coletores') }}"
+            {% if pode_inventario %}
+            <a {% if pode_inventario %}href="{{ url_for('coletores.gerenciar_coletores') }}"{% endif %}
                class="btn btn-light btn-sm fw-bold">
                 <i class="fa-solid fa-list me-1"></i>{{ t('pendcomp.ver_inventario') }}
             </a>
+            {% endif %}
         </div>
         <div class="table-responsive">
             <table class="table table-sm table-hover align-middle mb-0">
@@ -161,9 +153,11 @@
     {% endif %}
 
     {# ── KPIs — linha 1 (frota) ── #}
-    <div class="row g-3 mb-3">
-        <div class="col-6 col-xl-3">
-            <a href="{{ url_for('coletores.gerenciar_coletores') }}" class="text-decoration-none text-reset">
+    {# Os cinco indicadores numa linha só: 2 por linha no celular, 3 em tela
+       média, 5 em tela larga — nenhum card fica órfão numa linha própria. #}
+    <div class="row row-cols-2 row-cols-md-3 row-cols-xl-5 g-3 mb-4">
+        <div class="col">
+            <a {% if pode_inventario %}href="{{ url_for('coletores.gerenciar_coletores') }}"{% endif %} class="text-decoration-none text-reset">
                     <div class="card card-custom h-100 border-top border-3 border-primary">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
@@ -192,8 +186,8 @@
                 </a>
         </div>
 
-        <div class="col-6 col-xl-3">
-            <a href="{{ url_for('coletores.gerenciar_coletores', status='Disponível') }}" class="text-decoration-none text-reset">
+        <div class="col">
+            <a {% if pode_inventario %}href="{{ url_for('coletores.gerenciar_coletores', status='Disponível') }}"{% endif %} class="text-decoration-none text-reset">
                     <div class="card card-custom h-100 border-top border-3 border-success">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
@@ -213,8 +207,8 @@
                 </a>
         </div>
 
-        <div class="col-6 col-xl-3">
-            <a href="{{ url_for('coletores.gerenciar_coletores', status='Em Uso') }}" class="text-decoration-none text-reset">
+        <div class="col">
+            <a {% if pode_inventario %}href="{{ url_for('coletores.gerenciar_coletores', status='Em Uso') }}"{% endif %} class="text-decoration-none text-reset">
                     <div class="card card-custom h-100 border-top border-3 border-warning">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
@@ -234,8 +228,8 @@
                 </a>
         </div>
 
-        <div class="col-6 col-xl-3">
-            <a href="{{ url_for('coletores.gerenciar_coletores', status=STATUS_INDISPONIVEIS) }}" class="text-decoration-none text-reset">
+        <div class="col">
+            <a {% if pode_inventario %}href="{{ url_for('coletores.gerenciar_coletores', status=STATUS_INDISPONIVEIS) }}"{% endif %} class="text-decoration-none text-reset">
                     <div class="card card-custom h-100 border-top border-3 border-danger">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
@@ -251,12 +245,8 @@
             </div>
                 </a>
         </div>
-    </div>
-
-    {# ── KPIs — linha 2: o que está em falta ── #}
-    <div class="row g-3 mb-4">
-        <div class="col-6 col-xl-3">
-            <a href="{{ url_for('coletores.gerenciar_coletores', pendencia=1) }}"
+        <div class="col">
+            <a {% if pode_inventario %}href="{{ url_for('coletores.gerenciar_coletores', pendencia=1) }}"{% endif %}
                class="text-decoration-none text-reset">
                 <div class="card card-custom h-100 border-top border-3 border-danger">
                     <div class="card-body">

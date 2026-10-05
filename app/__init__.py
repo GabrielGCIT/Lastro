@@ -173,7 +173,7 @@ def create_app(database_url=None):
         from sqlalchemy.orm import joinedload
         from app.models import Usuario, Grupo
         if _r.endpoint in ('static', 'auth.login', 'auth.logout',
-                           'auth.esqueci_senha', 'auth.redefinir_senha', None):
+                           'auth.esqueci_senha', 'auth.primeiro_acesso', None):
             return
         # Endpoints de API são chamados em alta frequência (polling, debounce de lookup).
         # A sessão já foi sincronizada no request de navegação anterior — não é necessário
@@ -185,29 +185,18 @@ def create_app(database_url=None):
             return
         # joinedload: 1 query com JOIN em vez de 3 queries lazy (Usuario → grupo → permissoes).
         # joinedload é correto para many-to-one (grupo) e many-to-many (permissoes via tabela pivot).
-        # empresa entra no mesmo JOIN — alimenta o bloqueio de tenant suspenso abaixo.
         u = (db.session.query(Usuario)
-             .options(joinedload(Usuario.grupo).joinedload(Grupo.permissoes),
-                      joinedload(Usuario.empresa))
+             .options(joinedload(Usuario.grupo).joinedload(Grupo.permissoes))
              .filter(Usuario.id == user_id)
              .first())
         if not u:
             # Usuário foi removido do banco mas ainda tem sessão ativa — limpa tudo.
             _s.clear()
             return
-        # T2 — empresa suspensa derruba a sessão ativa na hora (não só no próximo
-        # login): suspender um tenant precisa ter efeito imediato. Owner é da
-        # plataforma e nunca é barrado por empresa.
-        if u.empresa and not u.empresa.ativa and not u.is_owner:
-            from flask import redirect as _redirect, url_for as _url_for, flash as _flash
-            _s.clear()
-            _flash('O acesso da sua empresa está suspenso. Contate o suporte.', 'danger')
-            return _redirect(_url_for('auth.login'))
         _s['grupo']      = u.grupo.nome if u.grupo else None
         _s['permissoes'] = [p.codigo for p in u.grupo.permissoes] if u.grupo else []
-        # T2 — tenant e papel de plataforma sincronizados como os demais campos
         _s['empresa_id'] = u.empresa_id
-        _s['is_owner']   = bool(u.is_owner)
+        _s['senha_provisoria'] = bool(u.senha_provisoria)
         # P7 — sincronizar campos de multi-tenancy a cada request (como grupo/permissoes)
         _nivel_anterior     = _s.get('nivel_acesso')
         _s['nivel_acesso']  = u.nivel_acesso or 'CD'
@@ -237,20 +226,22 @@ def create_app(database_url=None):
                 _s['view_context'] = 'GLOBAL'
 
     @app.before_request
-    def _validar_impersonation():
-        """Fail-closed da impersonation (T4c): se a chave está setada mas não é um
-        Owner (tampering) ou aponta para uma empresa inexistente, limpa a chave —
-        para a sessão não ficar presa vendo zero. Barato: só toca o banco quando a
-        chave existe (Owner impersonando é raro). Roda DEPOIS do _sync_permissoes
-        (registrado antes), então is_owner já está fresco do banco.
+    def _exigir_troca_de_senha():
+        """Com senha provisória, a única coisa que o usuário faz é trocá-la.
+
+        A senha foi definida pela TI: até o dono escolher a dele, quem a conhece
+        poderia agir em nome dele. Vale também para /api/ (o _sync_permissoes
+        pula essas rotas, então a marca lida aqui é a que o login gravou).
         """
-        from flask import session as _s
-        eid = _s.get('empresa_impersonada')
-        if eid is None:
+        from flask import request as _r, session as _s, redirect as _redirect, url_for as _url_for
+        if not _s.get('senha_provisoria'):
             return
-        from app.models import Empresa
-        if not _s.get('is_owner') or db.session.get(Empresa, eid) is None:
-            _s.pop('empresa_impersonada', None)
+        if _r.endpoint in ('static', 'auth.trocar_senha', 'auth.logout', None):
+            return
+        if _r.path.startswith('/api/'):
+            from flask import jsonify as _jsonify
+            return _jsonify({'ok': False, 'erro': 'Troque a senha provisória antes de continuar.'}), 403
+        return _redirect(_url_for('auth.trocar_senha'))
 
     @app.context_processor
     def inject_globals():

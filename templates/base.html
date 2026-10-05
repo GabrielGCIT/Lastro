@@ -758,7 +758,7 @@
                                         {{ session.get('nome', '') }}
                                     </div>
                                     <div class="text-muted" style="font-size: 0.7rem;">
-                                        RE {{ session.get('re', '') }} · {{ (session.get('grupo') or '').replace('_', ' ') }}
+                                        RE {{ session.get('re', '') }} · {{ t('perfil.nome.' ~ session.get('grupo')) if session.get('grupo') else '' }}
                                     </div>
                                 </div>
                             </div>
@@ -871,6 +871,14 @@
             <div class="col-lg-2 sidebar collapse d-lg-block" id="sidebarMenu">
 
                 {% block sidebar_nav %}
+                {# O menu segue o trabalho de cada perfil (startup.GRUPOS_DEFAULTS):
+                     Visão geral  — dashboard, painel e histórico (todos)
+                     Balcão       — retirar, devolver, reportar
+                     Cadastros    — coletores, colaboradores, peças (Supervisor e TI)
+                     Administração— usuários, CDs, perfis, logs (só TI)
+                     Ajuda        — glossário, aberto a qualquer um
+                   Cada seção só aparece se o perfil tem ao menos um item dela:
+                   título sem link embaixo é menu que promete e não entrega. #}
                 <nav class="nav flex-column px-2 sidebar-nav">
 
                     {% if has_permissao('dashboard.ver') %}
@@ -878,6 +886,20 @@
                     <a class="sidebar-link {{ 'active' if request.endpoint == 'dashboard.index' else '' }}"
                        href="{{ url_for('dashboard.index') }}">
                         <i class="fa-solid fa-gauge"></i> {{ t('nav.dashboard') }}
+                    </a>
+                    {% endif %}
+
+                    {% if has_permissao('painel_op.ver') %}
+                    <a class="sidebar-link {{ 'active' if request.endpoint == 'dashboard.relatorio_operacional' else '' }}"
+                       href="{{ url_for('dashboard.relatorio_operacional') }}">
+                        <i class="fa-solid fa-chart-bar"></i> {{ t('nav.painel_operacional') }}
+                    </a>
+                    {% endif %}
+
+                    {% if has_permissao('painel_op.ver') or has_permissao('mov.retirar') %}
+                    <a class="sidebar-link {{ 'active' if request.endpoint == 'dashboard.historico_completo' else '' }}"
+                       href="{{ url_for('dashboard.historico_completo') }}">
+                        <i class="fa-solid fa-clock-rotate-left"></i> {{ t('nav.historico') }}
                     </a>
                     {% endif %}
 
@@ -899,21 +921,7 @@
                     </a>
                     {% endif %}
 
-                    {% if has_permissao('painel_op.ver') %}
-                    <a class="sidebar-link {{ 'active' if request.endpoint == 'dashboard.relatorio_operacional' else '' }}"
-                       href="{{ url_for('dashboard.relatorio_operacional') }}">
-                        <i class="fa-solid fa-chart-bar"></i> {{ t('nav.painel_operacional') }}
-                    </a>
-                    {% endif %}
-
-                    {% if has_permissao('painel_op.ver') or has_permissao('mov.retirar') %}
-                    <a class="sidebar-link {{ 'active' if request.endpoint == 'dashboard.historico_completo' else '' }}"
-                       href="{{ url_for('dashboard.historico_completo') }}">
-                        <i class="fa-solid fa-clock-rotate-left"></i> {{ t('nav.historico') }}
-                    </a>
-                    {% endif %}
-
-                    {% if has_permissao('admin.inventario_ativos') %}
+                    {% if has_permissao('admin.inventario_ativos') or has_permissao('admin.colaboradores') or has_permissao('inventario.liberar_suspenso') %}
                     <span class="sidebar-label mt-4 mb-2">{{ t('nav.gestao_tecnica') }}</span>
                     {% endif %}
 
@@ -924,21 +932,27 @@
                     </a>
                     {% endif %}
 
+                    {# Colaboradores é cadastro do dia a dia do CD, não administração do
+                       sistema: o Supervisor cuida dele sem passar pela área da TI. #}
+                    {% if has_permissao('admin.colaboradores') %}
+                    <a class="sidebar-link {{ 'active' if request.endpoint and request.endpoint.startswith('colaboradores.') else '' }}"
+                       href="{{ url_for('colaboradores.lista') }}">
+                        <i class="fa-solid fa-people-group"></i> {{ t('nav.colaboradores') }}
+                    </a>
+                    {% endif %}
+
                     {% if has_permissao('admin.inventario_ativos') %}
                     <a class="sidebar-link {{ 'active' if request.endpoint == 'complementos.index' else '' }}"
                        href="{{ url_for('complementos.index') }}">
                         <i class="fa-solid fa-plug-circle-plus"></i> {{ t('nav.complementos') }}
                     </a>
                     {# B2 — bateria tem entrada própria: ela é fungível e some o tempo
-                       todo, enquanto complemento tem patrimônio e dono. Misturar as
-                       duas no mesmo menu foi o que fez a tela ficar impossível de
-                       ensinar. #}
+                       todo, enquanto complemento tem patrimônio e dono. #}
                     <a class="sidebar-link {{ 'active' if request.endpoint and request.endpoint.startswith('complementos.baterias') else '' }}"
                        href="{{ url_for('complementos.baterias') }}">
                         <i class="fa-solid fa-car-battery"></i> {{ t('nav.baterias') }}
                     </a>
-                    {# H5 — entrada própria: rastreio é OPERAÇÃO, o catálogo é CADASTRO.
-                       Escondido dentro da outra tela, ninguém acharia a cobrança. #}
+                    {# H5 — rastreio é OPERAÇÃO, o catálogo é CADASTRO. #}
                     <a class="sidebar-link {{ 'active' if request.endpoint == 'complementos.rastreio' else '' }}"
                        href="{{ url_for('complementos.rastreio') }}">
                         <i class="fa-solid fa-location-crosshairs"></i> {{ t('nav.rastreio') }}
@@ -952,11 +966,9 @@
                     </a>
                     {% endif %}
 
-                    {# Administração — a porta para as telas de cadastro e acesso.
-                       Leva à primeira que o usuário pode abrir; as outras ficam no
-                       menu lateral de lá (base_hub.html). #}
+                    {# Administração — só TI. Leva à primeira tela que o usuário pode
+                       abrir; as outras ficam no menu lateral de lá (base_hub.html). #}
                     {% if has_permissao('admin.usuarios') %}{% set _adm = url_for('dashboard.gerenciar_usuarios') %}
-                    {% elif has_permissao('admin.colaboradores') %}{% set _adm = url_for('colaboradores.lista') %}
                     {% elif has_permissao('admin.localidades') %}{% set _adm = url_for('coletores.gerenciar_localidades') %}
                     {% elif has_permissao('admin.grupos') %}{% set _adm = url_for('dashboard.gerenciar_grupos') %}
                     {% elif has_permissao('auditoria.ver') %}{% set _adm = url_for('dashboard.auditoria') %}
@@ -964,14 +976,14 @@
                     {% if _adm %}
                     <span class="sidebar-label mt-4 mb-2">{{ t('nav.administracao') }}</span>
                     <a class="sidebar-link" href="{{ _adm }}">
-                        <i class="fa-solid fa-gear"></i> {{ t('nav.administracao') }}
+                        <i class="fa-solid fa-gear"></i> {{ t('nav.usuarios_e_acessos') }}
                     </a>
                     {% endif %}
 
-                    {# U4 — o glossário é CONSULTA, não operação: fica no fim, fora
-                       dos blocos de trabalho, e sem exigir permissão. Um glossário
-                       que só alguns conseguem abrir falha justamente com quem mais
-                       precisa dele. #}
+                    {# U4 — o glossário é CONSULTA, não operação: seção própria e sem
+                       exigir permissão. Um glossário que só alguns conseguem abrir
+                       falha justamente com quem mais precisa dele. #}
+                    <span class="sidebar-label mt-4 mb-2">{{ t('nav.ajuda') }}</span>
                     <a class="sidebar-link {{ 'active' if request.endpoint == 'dashboard.glossario' else '' }}"
                        href="{{ url_for('dashboard.glossario') }}">
                         <i class="fa-solid fa-book"></i> {{ t('nav.glossario') }}
@@ -992,7 +1004,7 @@
                         <div>
                             <div class="sidebar-footer-name">{{ session.get('nome', '') }}</div>
                             <div class="sidebar-footer-meta">
-                                RE {{ session.get('re', '') }} · {{ (session.get('grupo') or '—').replace('_', ' ') }}
+                                RE {{ session.get('re', '') }} · {{ t('perfil.nome.' ~ session.get('grupo')) if session.get('grupo') else '—' }}
                             </div>
                         </div>
                     </div>

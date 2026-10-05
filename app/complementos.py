@@ -424,9 +424,7 @@ def prazo_horas(empresa_id=None):
     48h — e isso não pode exigir deploy. `politica_empresa` já degrada para o
     default do registry quando a empresa não gravou linha própria.
 
-    Sem `empresa_id`, resolve o tenant da sessão. Owner sem impersonar cai no
-    default: ele enxerga tenants misturados e não existe um prazo único correto
-    nesse caso — o padrão da plataforma é a resposta menos errada.
+    Sem `empresa_id`, resolve a empresa da sessão.
 
     ⚠️ Fora de request não há sessão, e `politica_empresa` sem `empresa_id`
     tentaria lê-la. Acontece de verdade: os scripts de validação e o cenário de

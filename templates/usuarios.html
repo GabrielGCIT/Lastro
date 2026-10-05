@@ -22,11 +22,11 @@
                        placeholder="Buscar por nome ou RE..." oninput="filtrarUsuarios()">
             </div>
             <div class="col-md-2">
-                <label class="form-label small fw-bold text-muted text-uppercase">{{ t('label.grupo') }}</label>
+                <label class="form-label small fw-bold text-muted text-uppercase">{{ t('label.perfil') }}</label>
                 <select id="filtro-grupo" class="form-select form-select-sm" onchange="filtrarUsuarios()">
-                    <option value="">Todos</option>
+                    <option value="">{{ t('usuarios.todos') }}</option>
                     {% for g in grupos %}
-                    <option value="{{ g.nome }}">{{ g.nome.replace('_', ' ') }}</option>
+                    <option value="{{ g.nome }}">{{ t('perfil.nome.' ~ g.nome) }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -76,7 +76,7 @@
                         <th style="width: 48px;"></th>
                         <th>{{ t('label.nome') }}</th>
                         <th>{{ t('usuarios.col_re') }}</th>
-                        <th>{{ t('label.grupo') }}</th>
+                        <th>{{ t('label.perfil') }}</th>
                         <th>{{ t('label.localidade') }}</th>
                         <th>{{ t('label.camara') }}</th>
                         <th>{{ t('label.turno') }}</th>
@@ -113,15 +113,15 @@
                         </td>
                         <td class="fw-bold">
                             {{ u.nome }}
-                            {% if u.criado_em_campo %}
-                                <span class="badge bg-info text-dark ms-1" style="font-size:0.6rem;">{{ t('usuarios.badge_em_campo') }}</span>
+                            {# Senha provisória = a pessoa ainda não entrou com a senha
+                               dela. A TI precisa ver isso para saber a quem avisar. #}
+                            {% if u.senha_provisoria %}
+                                <span class="badge bg-warning text-dark ms-1" style="font-size:0.6rem;"
+                                      title="{{ t('usuarios.provisoria_dica') }}">{{ t('usuarios.badge_provisoria') }}</span>
                             {% endif %}
-                            {# T2 — e-mail é a credencial de login: exibir aqui deixa visível
-                               quem ainda não tem (não consegue logar) na transição RE → e-mail #}
                             {% if u.email %}
                                 <div class="small text-muted fw-normal">{{ u.email }}</div>
-                            {% elif not u.grupo or u.grupo.nome != 'OPERADOR' %}
-                                {# OPERADOR não faz login — sem e-mail é o estado normal dele #}
+                            {% else %}
                                 <div class="small text-warning fw-normal" title="{{ t('usuarios.sem_email_hint') }}">
                                     <i class="fa-solid fa-triangle-exclamation me-1"></i>{{ t('usuarios.sem_email') }}
                                 </div>
@@ -131,22 +131,13 @@
                         <td>
                             {% if u.grupo %}
                                 {% set gc = {
-                                    'TI_MASTER':   'bg-dark',
-                                    'TI':          'bg-dark',
-                                    'DIRETOR':     'bg-danger',
-                                    'GERENTE':     'bg-primary',
-                                    'SUPERVISOR':  'bg-info text-dark',
-                                    'COORDENADOR': 'bg-info text-dark',
-                                    'ANALISTA':    'bg-secondary',
-                                    'ESPECIALISTA':'bg-warning text-dark',
-                                    'TECNICO':     'bg-warning text-dark',
-                                    'LIDER':       'bg-success',
-                                    'OPERADOR':    'bg-secondary',
-                                    'CONSULTA':    'bg-light text-dark border',
-                                    'AUDITOR':     'bg-danger',
+                                    'TI':         'bg-dark',
+                                    'SUPERVISOR': 'bg-primary',
+                                    'BALCAO':     'bg-success',
+                                    'CONSULTA':   'bg-light text-dark border',
                                 } %}
                                 <span class="badge {{ gc.get(u.grupo.nome, 'bg-secondary') }}">
-                                    {{ u.grupo.nome.replace('_', ' ') }}
+                                    {{ t('perfil.nome.' ~ u.grupo.nome) }}
                                 </span>
                             {% else %}
                                 <span class="badge bg-secondary">{{ t('usuarios.sem_grupo') }}</span>
@@ -202,15 +193,6 @@
                                     onclick="editarUsuario('{{ u.id }}', '{{ u.nome | replace("'", "\\'") }}', '{{ u.re }}', '{{ u.grupo_id or '' }}', '{{ u.localidade_id or '' }}', '{{ u.camara or '' }}', '{{ u.turno or '' }}', '{{ u.nivel_acesso or 'CD' }}', '{{ u.pais_id or '' }}', '{{ u.america_id or '' }}', '{{ (u.email or '') | replace("'", "\\'") }}')">
                                 <i class="fa-solid fa-pen"></i> {{ t('btn.editar') }}
                             </button>
-                            {% if u.criado_em_campo %}
-                            <form action="{{ url_for('dashboard.revisar_usuario', user_id=u.id) }}"
-                                  method="POST" class="d-inline"
-                                  onsubmit="return confirm('Marcar conta de {{ u.nome }} como revisada?\nIsso remove o alerta do dashboard.')">
-                                <button type="submit" class="btn btn-sm btn-outline-success">
-                                    <i class="fa-solid fa-user-check"></i> {{ t('usuarios.btn_revisar') }}
-                                </button>
-                            </form>
-                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
@@ -245,26 +227,31 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold small">{{ t('label.email') }}</label>
+                        <label class="form-label fw-bold small">{{ t('label.email') }} <span class="text-danger">*</span></label>
                         <input type="email" class="form-control" name="email" id="email_usuario"
-                               placeholder="nome@empresa.com">
+                               placeholder="nome@empresa.com" required>
                         <div class="form-text">{{ t('usuarios.hint_email') }}</div>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label fw-bold small">{{ t('label.senha') }} <span class="text-danger" id="senha_asterisco">*</span></label>
                         <input type="password" class="form-control" name="senha" id="senha"
-                               placeholder="Digite a senha">
+                               minlength="{{ senha_minima }}" autocomplete="new-password">
                         <div class="form-text" id="msg_senha">{{ t('usuarios.hint_senha_novo') }}</div>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold small">{{ t('usuarios.label_grupo_acesso') }}</label>
+                        <label class="form-label fw-bold small">{{ t('label.perfil') }}</label>
                         <select class="form-select" name="grupo_id" id="grupo_id" required>
                             {% for g in grupos %}
-                            <option value="{{ g.id }}">{{ g.nome.replace('_', ' ') }} — {{ g.descricao }}</option>
+                            <option value="{{ g.id }}">{{ t('perfil.nome.' ~ g.nome) }} — {{ t('perfil.desc.' ~ g.nome) }}</option>
                             {% endfor %}
                         </select>
+                        <div class="form-text">
+                            <a href="{{ url_for('dashboard.gerenciar_grupos') }}" target="_blank" class="text-decoration-none">
+                                <i class="fa-solid fa-table-list me-1"></i>{{ t('usuarios.ver_perfis') }}
+                            </a>
+                        </div>
                     </div>
 
                     <div class="mb-3">

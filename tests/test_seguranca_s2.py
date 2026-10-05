@@ -4,7 +4,7 @@ S2 — testes da família B (IDOR de ESCRITA) + decisões de produto do pacote.
 Prova que uma sessão da MB (User A) NÃO consegue mutar registros da Acme (User B)
 por id: o alvo é tratado como inexistente e nada muda no banco. Cobre os dois
 mecanismos de guard — empresa_visivel (empresa_id direto) e escopo por localidade
-(Coletor) — mais Países só-Owner.
+(Coletor).
 """
 from types import SimpleNamespace
 
@@ -25,7 +25,6 @@ def _cliente_logado(app, user):
         s['nome']         = user.nome
         s['re']           = user.re
         s['empresa_id']   = user.empresa_id
-        s['is_owner']     = bool(user.is_owner)
         s['nivel_acesso'] = user.nivel_acesso
     return c
 
@@ -34,11 +33,11 @@ def _cliente_logado(app, user):
 def cen(app):
     """MB (A) + Acme (B) com registros ESPELHADOS na Acme para o cross-mutate."""
     mb   = Empresa.query.filter_by(nome='Martin Brower').first()
-    acme = Empresa(nome='Acme Logística', ativa=True)
+    acme = Empresa(nome='Acme Logística')
     db.session.add(acme)
     db.session.flush()
 
-    ti = Grupo.query.filter_by(nome='TI_MASTER').first()
+    ti = Grupo.query.filter_by(nome='TI').first()
     locA = Localidade(sigla='AAA', nome='CD A', empresa_id=mb.id)
     locB = Localidade(sigla='BBB', nome='CD B', empresa_id=acme.id)
     db.session.add_all([locA, locB])
@@ -95,10 +94,16 @@ def test_usuario_editar_cross_tenant_bloqueado(app, cen):
     assert cen.userB.nome == 'User B'
 
 
-def test_grupo_excluir_cross_tenant_bloqueado(app, cen):
-    cA = _cliente_logado(app, cen.userA)
-    cA.post(f'/grupos/{cen.grpB.id}/excluir')
-    assert db.session.get(Grupo, cen.grpB.id) is not None   # não foi excluído
+def test_perfil_nao_se_exclui_nem_se_edita_por_rota(app, cen):
+    """Os perfis são fixos: as rotas de criar, excluir e editar permissões
+    deixaram de existir — nem o próprio TI as alcança."""
+    from app.models import Usuario
+    cAdmin = _cliente_logado(app, Usuario.query.filter_by(re='admin').first())
+    ti = Grupo.query.filter_by(nome='TI', empresa_id=cen.mb.id).first()
+    assert cAdmin.post(f'/grupos/{ti.id}/excluir').status_code == 404
+    assert cAdmin.post(f'/grupos/{ti.id}/permissoes').status_code == 404
+    assert cAdmin.post('/grupos/criar', data={'nome': 'NOVO'}).status_code == 404
+    assert db.session.get(Grupo, ti.id) is not None
 
 
 def test_localidade_editar_cross_tenant_bloqueado(app, cen):
@@ -117,34 +122,6 @@ def test_suspenso_reativar_cross_tenant_bloqueado(app, cen):
     cA = _cliente_logado(app, cen.userA)
     cA.post('/suspensos/reativar', data={'coletor_id': cen.coletorB.id, 'declaracao': 'on'})
     assert ReativacaoIdentificacao.query.filter_by(coletor_id=cen.coletorB.id).count() == 0
-
-
-def test_owner_muta_qualquer_tenant(app, cen):
-    """O Owner (admin) passa por todos os guards — enxerga todas as empresas."""
-    cAdmin = _cliente_logado(app, cen.admin)
-    cAdmin.post(f'/admin/colaboradores/{cen.colabB.id}/editar',
-                data={'re': 'C002', 'nome': 'Owner Edit'})
-    db.session.refresh(cen.colabB)
-    assert cen.colabB.nome == 'Owner Edit'
-
-
-# ---------------------------------------------------------------------------
-# Decisões de produto
-# ---------------------------------------------------------------------------
-
-def test_pais_escrita_so_owner(app, cen):
-    cA = _cliente_logado(app, cen.userA)          # TI_MASTER, mas não Owner
-    cA.post('/paises', data={'acao': 'criar', 'sigla': 'XX', 'nome': 'Xland',
-                             'america_id': 1})
-    assert Pais.query.filter_by(sigla='XX').first() is None
-
-
-def test_pais_escrita_owner_ok(app, cen):
-    cAdmin = _cliente_logado(app, cen.admin)
-    america_id = Pais.query.first().america_id
-    cAdmin.post('/paises', data={'acao': 'criar', 'sigla': 'XX', 'nome': 'Xland',
-                                 'america_id': america_id})
-    assert Pais.query.filter_by(sigla='XX').first() is not None
 
 
 # ---------------------------------------------------------------------------

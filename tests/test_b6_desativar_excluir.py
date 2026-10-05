@@ -44,7 +44,7 @@ def cena(app, loc):
 @pytest.fixture()
 def operador(app):
     """O usuário logado, com senha conhecida — a exclusão vai pedi-la."""
-    ti = __import__('app.models', fromlist=['Grupo']).Grupo.query.filter_by(nome='TI_MASTER').first()
+    ti = __import__('app.models', fromlist=['Grupo']).Grupo.query.filter_by(nome='TI').first()
     mb = Empresa.query.filter_by(nome='Martin Brower').first()
     u = Usuario(nome='Operadora B6', re='6600', email='b6@teste.local',
                 senha_hash=generate_password_hash(SENHA, method='scrypt'),

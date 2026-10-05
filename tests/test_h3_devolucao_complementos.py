@@ -58,7 +58,7 @@ def emprestimo(app, loc):
                                        item_id=hs.id, qtd_saida=1, qtd_devolvida=0)
     db.session.add_all([linha_bat, linha_hs])
 
-    ti = Grupo.query.filter_by(nome='TI_MASTER').first()
+    ti = Grupo.query.filter_by(nome='TI').first()
     analista = Usuario(nome='Analista Balcao', re='9200', email='balcao3@mb.test',
                        senha_hash=generate_password_hash('x', method='scrypt'),
                        grupo_id=ti.id, empresa_id=mb.id, nivel_acesso='GLOBAL',

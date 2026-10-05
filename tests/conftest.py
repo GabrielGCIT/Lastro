@@ -11,10 +11,10 @@ import os
 os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
 os.environ['SECRET_KEY']   = 'test-secret'
 
-# O seed sorteia a senha do admin quando ninguém diz qual é. A suíte precisa de
-# uma senha CONHECIDA para exercitar o login, então declara a dela aqui — em vez
-# de a senha de produção ficar fixa no código para servir aos testes.
-os.environ.setdefault('MBASSETS_ADMIN_SENHA', 'admin123')
+# Senha do administrador criado em cada teste (o boot não cria usuário: em
+# produção o admin nasce no primeiro acesso, com a senha que quem instala escolhe).
+ADMIN_EMAIL = 'admin@mbassets.local'
+ADMIN_SENHA = 'admin123'
 
 import pytest  # noqa: E402
 
@@ -22,9 +22,21 @@ from app import create_app, db          # noqa: E402
 from app.startup import executar_startup  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _token_primeiro_acesso_isolado(tmp_path, monkeypatch):
+    """O arquivo do token do primeiro acesso vai para uma pasta temporária.
+
+    Sem isto, criar o admin nos testes apagaria o token de uma instalação de
+    desenvolvimento que ainda não fez o primeiro acesso.
+    """
+    import app.helpers as helpers
+    monkeypatch.setattr(helpers, 'PRIMEIRO_ACESSO_ARQUIVO',
+                        str(tmp_path / 'primeiro_acesso.token'))
+
+
 @pytest.fixture()
 def app():
-    """App Flask com banco SQLite em memória, schema e seeds completos.
+    """App Flask com banco SQLite em memória, schema, seeds e o administrador.
 
     Function-scoped: cada teste recebe um banco zerado — isolamento total
     ao custo de ~0,5s de startup por teste (aceitável para o volume atual).
@@ -34,6 +46,8 @@ def app():
     application.config['WTF_CSRF_ENABLED'] = False
     with application.app_context():
         executar_startup()
+        from app.helpers import criar_administrador
+        criar_administrador('Administrador TI', ADMIN_EMAIL, ADMIN_SENHA)
         yield application
         db.session.remove()
 
@@ -46,7 +60,7 @@ def client(app):
 
 @pytest.fixture()
 def admin_client(app):
-    """Cliente autenticado como admin (grupo TI_MASTER — todas as permissões).
+    """Cliente autenticado como admin (perfil TI — todas as permissões).
 
     Só user_id/nome/re entram na sessão: o hook _sync_permissoes preenche
     grupo e permissões a partir do banco a cada request, como em produção.
@@ -93,7 +107,6 @@ def cliente_logado(app):
             s['nome']         = user.nome
             s['re']           = user.re
             s['empresa_id']   = user.empresa_id
-            s['is_owner']     = bool(user.is_owner)
             s['nivel_acesso'] = user.nivel_acesso
         return c
     return _make
@@ -114,14 +127,14 @@ def duas_empresas(app):
     from app.models import Empresa, Localidade, Usuario, Grupo, Colaborador
 
     mb   = Empresa.query.filter_by(nome='Martin Brower').first()
-    acme = Empresa(nome='Acme Logística', ativa=True)
+    acme = Empresa(nome='Acme Logística')
     db.session.add(acme)
     db.session.flush()
 
-    # TI_MASTER carrega todas as permissões — o isolamento aqui é por tenant
+    # TI carrega todas as permissões — o isolamento aqui é por tenant
     # (empresa_id/localidade), não por RBAC; reusar o grupo evita montar um
     # segundo conjunto de permissões só para o teste.
-    ti = Grupo.query.filter_by(nome='TI_MASTER').first()
+    ti = Grupo.query.filter_by(nome='TI').first()
 
     locA = Localidade(sigla='AAA', nome='CD A', empresa_id=mb.id)
     locB = Localidade(sigla='BBB', nome='CD B', empresa_id=acme.id)

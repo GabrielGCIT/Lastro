@@ -12,7 +12,7 @@ Permissões exigidas:
 
 from datetime import datetime, date
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from flask import Blueprint, render_template, request, redirect, url_for, flash
 
 from app import db
 from app.models import (Coletor, Localidade, Movimentacao, Usuario,
@@ -20,7 +20,7 @@ from app.models import (Coletor, Localidade, Movimentacao, Usuario,
                         STATUS_COLETOR)
 from app.helpers import (login_required, permissao_required, registrar_log,
                          get_filtro_localidade, empresa_para_escrita,
-                         localidade_para_escrita, empresa_visivel, criterio_empresa,
+                         localidade_para_escrita, empresa_visivel,
                          parse_int, voltar_seguro)
 
 coletores_bp = Blueprint('coletores', __name__)
@@ -373,91 +373,6 @@ def gerenciar_localidades():
 # ---------------------------------------------------------------------------
 # PAÍSES
 # ---------------------------------------------------------------------------
-
-@coletores_bp.route('/paises', methods=['GET', 'POST'])
-@permissao_required('admin.localidades')
-def gerenciar_paises():
-    """
-    Gerencia o cadastro de países dentro das Américas.
-
-    Segue o mesmo padrão de localidades: um único endpoint GET/POST com campo
-    'acao' discriminando a intenção (criar ou editar). Exclusão não é oferecida
-    porque países são dados de hierarquia global — a remoção deve ser feita
-    diretamente no banco com análise prévia de impacto.
-
-    Permissão reutilizada: 'admin.localidades' — países e localidades fazem
-    parte da mesma administração geográfica e o mesmo perfil gerencia ambos.
-
-    S2 — Países/Américas são referência COMPARTILHADA entre tenants (todos
-    veem BR, US, etc.). A LEITURA é livre; a ESCRITA é exclusiva do Owner da
-    plataforma (decisão de produto, kickoff 15/07): um tenant não altera a
-    hierarquia geográfica que os outros consomem.
-    """
-    if request.method == 'POST':
-        if not session.get('is_owner'):
-            flash('Apenas o administrador da plataforma pode alterar países.', 'danger')
-            return redirect(url_for('coletores.gerenciar_paises'))
-        acao = request.form.get('acao')
-
-        if acao == 'criar':
-            sigla      = request.form.get('sigla', '').upper().strip()
-            nome       = request.form.get('nome', '').strip()
-            america_id_raw = request.form.get('america_id') or None
-            if not sigla or not nome or not america_id_raw:
-                flash('Sigla, nome e América são obrigatórios.', 'danger')
-            elif Pais.query.filter_by(sigla=sigla).first():
-                flash(f'Sigla "{sigla}" já está cadastrada.', 'danger')
-            else:
-                db.session.add(Pais(sigla=sigla, nome=nome, america_id=int(america_id_raw)))
-                registrar_log('CREATE_PAIS', f'País {sigla} — {nome} criado.')
-                db.session.commit()
-                flash(f'País {sigla} — {nome} criado com sucesso.', 'success')
-
-        elif acao == 'editar':
-            pais = db.session.get(Pais, request.form.get('id'))
-            if pais:
-                nova_sigla     = request.form.get('sigla', '').upper().strip()
-                novo_nome      = request.form.get('nome', '').strip()
-                america_id_raw = request.form.get('america_id') or None
-
-                if not nova_sigla or not novo_nome:
-                    flash('Sigla e nome são obrigatórios.', 'danger')
-                    return redirect(url_for('coletores.gerenciar_paises'))
-
-                conflito = Pais.query.filter(
-                    Pais.sigla == nova_sigla,
-                    Pais.id != pais.id,
-                ).first()
-                if conflito:
-                    flash(f'Sigla "{nova_sigla}" já está cadastrada em outro país.', 'danger')
-                    return redirect(url_for('coletores.gerenciar_paises'))
-
-                pais.sigla = nova_sigla
-                pais.nome  = novo_nome
-                if america_id_raw:
-                    pais.america_id = int(america_id_raw)
-                registrar_log('UPDATE_PAIS', f'País {pais.sigla} atualizado.')
-                db.session.commit()
-                flash(f'País {pais.sigla} atualizado.', 'success')
-
-        return redirect(url_for('coletores.gerenciar_paises'))
-
-    americas = America.query.order_by(America.sigla).all()
-    paises   = Pais.query.join(America, Pais.america_id == America.id).order_by(America.sigla, Pais.nome).all()
-
-    # S3/família C — a contagem de localidades por país é ESCOPADA pelo tenant.
-    # País é cadastro global (compartilhado entre empresas), então a relationship
-    # Pais.localidades atravessa tenants: usá-la no template fazia a empresa A
-    # exibir "1 localidade" que era, na verdade, da empresa B. Uma query agrupada
-    # (anti-N+1) resolve a contagem certa para todos os países de uma vez.
-    contagem_localidades = dict(
-        db.session.query(Localidade.pais_id, db.func.count(Localidade.id))
-        .filter(criterio_empresa(Localidade.empresa_id))
-        .group_by(Localidade.pais_id).all()
-    )
-    return render_template('paises.html', americas=americas, paises=paises,
-                           contagem_localidades=contagem_localidades)
-
 
 @coletores_bp.route('/coletores/mover', methods=['POST'])
 @login_required

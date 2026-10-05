@@ -1,7 +1,7 @@
 """
 Blueprint de gestão de coletores suspensos por violação de identificação.
 
-Exclusivo para grupos TI e TI_MASTER — protegido pela permissão
+Exclusivo do perfil TI — protegido pela permissão
 'inventario.liberar_suspenso'. Nenhum outro grupo tem acesso.
 
 Fluxo de reativação (dois fatores obrigatórios):

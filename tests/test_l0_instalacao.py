@@ -77,7 +77,7 @@ def test_banco_em_arquivo_usa_wal(tmp_path):
 def _usuario_sem_permissao():
     from app.models import Empresa, Grupo, Usuario
     mb = Empresa.query.first()
-    operador = Grupo.query.filter_by(nome='OPERADOR').first()
+    operador = Grupo.query.filter_by(nome='CONSULTA').first()
     u = Usuario(nome='Sem Permissão', re='5500', email='sem@perm.local',
                 senha_hash=generate_password_hash('x', method='scrypt'),
                 grupo_id=operador.id, empresa_id=mb.id, nivel_acesso='GLOBAL')

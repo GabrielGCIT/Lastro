@@ -25,7 +25,6 @@ def _cliente_logado(app, user):
         s['nome']         = user.nome
         s['re']           = user.re
         s['empresa_id']   = user.empresa_id
-        s['is_owner']     = bool(user.is_owner)
         s['nivel_acesso'] = user.nivel_acesso
     return c
 
@@ -34,11 +33,11 @@ def _cliente_logado(app, user):
 def cen(app):
     """MB (A) + Acme (B) com registros só na Acme para provar o vazamento de leitura."""
     mb   = Empresa.query.filter_by(nome='Martin Brower').first()
-    acme = Empresa(nome='Acme Logística', ativa=True)
+    acme = Empresa(nome='Acme Logística')
     db.session.add(acme)
     db.session.flush()
 
-    ti = Grupo.query.filter_by(nome='TI_MASTER').first()
+    ti = Grupo.query.filter_by(nome='TI').first()
     locA = Localidade(sigla='AAA', nome='CD A', empresa_id=mb.id)
     locB = Localidade(sigla='BBB', nome='CD B', empresa_id=acme.id)
     db.session.add_all([locA, locB])
@@ -128,66 +127,18 @@ def test_api_coletor_status_nao_encontra_acme(app, cen):
     assert resp.get_json()['encontrado'] is False
 
 
-def test_api_buscar_coletor_owner_encontra_acme(app, cen):
+def test_api_buscar_coletor_admin_nao_encontra_acme(app, cen):
+    """Nem o administrador enxerga coletor de outra empresa."""
     cAdmin = _cliente_logado(app, cen.admin)
     resp = cAdmin.get('/api/coletor/buscar?q=PAT-ACME&modo=patrimonio')
-    assert resp.get_json()['encontrado'] is True
+    assert resp.get_json()['encontrado'] is False
 
 
 # ---------------------------------------------------------------------------
-# Owner vê tudo (spot check)
+# O administrador também é de uma empresa só
 # ---------------------------------------------------------------------------
 
-def test_owner_ve_colaboradores_de_todos_os_tenants(app, cen):
+def test_admin_nao_ve_colaboradores_de_outra_empresa(app, cen):
     cAdmin = _cliente_logado(app, cen.admin)
     html = cAdmin.get('/admin/colaboradores/?status=todos').get_data(as_text=True)
-    assert 'Colaborador Acme' in html
-
-
-# ---------------------------------------------------------------------------
-# Contagem em cadastro GLOBAL não pode atravessar tenant (bug de campo 21/07)
-# ---------------------------------------------------------------------------
-
-def _paises_com_pais_br(cen):
-    """Ancora as duas localidades (MB e Acme) no MESMO país — o cenário do bug."""
-    from app.models import Pais
-    br = Pais.query.filter_by(sigla='BR').first()
-    cen.locA.pais_id = br.id
-    cen.locB.pais_id = br.id
-    db.session.commit()
-    return br
-
-
-def test_contagem_de_localidades_por_pais_nao_vaza_entre_tenants(app, cen):
-    """País é cadastro GLOBAL; a contagem de localidades dele é POR EMPRESA.
-
-    Regressão do bug encontrado em campo: a tela de Países usava a relationship
-    Pais.localidades (global), então a MB — sem nenhuma localidade no Brasil —
-    exibia "1 localidade(s)" que era, na verdade, da outra empresa.
-    """
-    _paises_com_pais_br(cen)
-
-    # Cada tenant enxerga apenas a própria localidade.
-    for user in (cen.userA, cen.userB):
-        html = _cliente_logado(app, user).get('/paises').get_data(as_text=True)
-        assert '1 localidade(s)' in html
-        assert '2 localidade(s)' not in html
-
-
-def test_tenant_sem_localidade_no_pais_nao_conta_a_do_outro(app, cen):
-    """O caso exato do print: a MB não tem localidade no BR, a Acme tem."""
-    from app.models import Pais
-    br = Pais.query.filter_by(sigla='BR').first()
-    cen.locB.pais_id = br.id          # só a Acme tem localidade no Brasil
-    cen.locA.pais_id = None
-    db.session.commit()
-
-    html = _cliente_logado(app, cen.userA).get('/paises').get_data(as_text=True)
-    assert 'localidade(s)' not in html      # MB não conta a localidade da Acme
-
-
-def test_owner_soma_as_localidades_de_todos_os_tenants(app, cen):
-    """Owner sem impersonation continua vendo o total da plataforma."""
-    _paises_com_pais_br(cen)
-    html = _cliente_logado(app, cen.admin).get('/paises').get_data(as_text=True)
-    assert '2 localidade(s)' in html
+    assert 'Colaborador Acme' not in html

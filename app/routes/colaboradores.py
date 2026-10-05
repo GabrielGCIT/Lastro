@@ -67,13 +67,10 @@ def novo():
         flash('RE e Nome são obrigatórios.', 'danger')
         return redirect(url_for('colaboradores.lista'))
 
-    # T4c — nasce na empresa EFETIVA (a impersonada, quando o Owner opera dentro de
-    # um tenant), não na session['empresa_id'] crua que o _sync_permissoes fixa na
-    # empresa do Owner. Espelha grupos/fornecedores; sem isso o Owner cadastrando
-    # dentro de um cliente gravava o colaborador na MB.
+    # Nasce carimbado com a empresa da sessão — nunca órfão.
     empresa_alvo = empresa_para_escrita()
     if empresa_alvo is None:
-        flash('Escolha uma empresa no topo da tela para cadastrar um colaborador.', 'warning')
+        flash('Sessão sem empresa. Saia e entre de novo.', 'warning')
         return redirect(url_for('colaboradores.lista'))
 
     # S1/família D — RE único POR empresa (constraint uq_colaboradores_empresa_re):
@@ -248,7 +245,6 @@ def api_criar_campo():
     if not re.isdigit() or len(re) < 4:
         return jsonify({'ok': False, 'erro': 'RE deve ter ao menos 4 dígitos e conter apenas números.'})
 
-    # T4c — empresa efetiva (a impersonada quando o Owner opera dentro de um tenant).
     empresa_alvo = empresa_para_escrita()
     if empresa_alvo is None:
         return jsonify({'ok': False, 'erro': 'Sem contexto de empresa para o cadastro.'})
