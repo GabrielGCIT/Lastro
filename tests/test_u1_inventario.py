@@ -45,17 +45,43 @@ def _mover(client, ids, destino_id):
 # a tabela
 # ---------------------------------------------------------------------------
 
-def test_colunas_extras_ficam_escondidas_por_padrao(admin_client, frota):
-    """Alcance, diagnóstico e observação vêm vazias na maioria das linhas e
-    escondem o que importa. Quem precisa liga."""
-    padrao = admin_client.get('/coletores').get_data(as_text=True)
-    assert 'Mostrar mais colunas' in padrao
-    assert 'col_diagnostico' not in padrao
+def test_a_tabela_mostra_todas_as_colunas_sempre(admin_client, frota):
+    """🔴 Decisão REVERTIDA pelo Gabriel em 06/10: o inventário mostra tudo.
 
-    tudo = admin_client.get('/coletores?colunas=tudo').get_data(as_text=True)
-    assert 'Mostrar menos colunas' in tudo
-    # o cabeçalho extra só existe na visão completa
-    assert tudo.count('<th') > padrao.count('<th')
+    A U1 escondia alcance, diagnóstico e observação atrás de um botão, com o
+    argumento de que vinham vazias na maioria das linhas e atrapalhavam a
+    leitura. Na prática, esconder informação atrás de um clique faz com que ela
+    deixe de existir para quem não sabe que o botão existe — e o custo de uma
+    coluna vazia é menor que o de um dado que ninguém encontra.
+
+    Este teste substituiu `test_colunas_extras_ficam_escondidas_por_padrao`, que
+    defendia o comportamento contrário. Ele não foi adaptado: a decisão mudou, e
+    teste que muda de lado junto com o código não defende nada.
+    """
+    html = admin_client.get('/coletores').get_data(as_text=True)
+
+    assert 'Mostrar mais colunas' not in html, 'o botão de colunas voltou'
+    assert 'Mostrar menos colunas' not in html
+
+    # As três que ficavam escondidas estão na tela, sem precisar de clique.
+    for chave in ('coletores.col_alcance', 'coletores.col_diagnostico',
+                  'coletores.col_observacao'):
+        assert chave not in html, f'{chave} ficou como chave crua na tela'
+    for rotulo in ('Alcance', 'Diagnóstico', 'Observação'):
+        assert rotulo in html, f'a coluna {rotulo} não aparece'
+
+
+def test_o_parametro_antigo_de_colunas_nao_muda_mais_nada(admin_client, frota):
+    """Link velho ou favorito com ?colunas=tudo não pode dar erro nem diferença.
+
+    Alguém favoritou a "visão completa" quando o botão existia. A URL continua
+    válida; ela apenas não significa mais nada.
+    """
+    normal = admin_client.get('/coletores').get_data(as_text=True)
+    com_param = admin_client.get('/coletores?colunas=tudo')
+
+    assert com_param.status_code == 200
+    assert com_param.get_data(as_text=True).count('<th') == normal.count('<th')
 
 
 def test_coluna_de_local_saiu_por_ser_redundante(admin_client, frota):

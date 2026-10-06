@@ -170,7 +170,6 @@ def gerenciar_coletores():
     # U1 — colunas extras sob demanda. Na operação típica, alcance, diagnóstico e
     # observação ficam vazios na maioria das linhas e viram parede de traços; quem
     # precisa delas liga, e a escolha sobrevive na URL (dá para favoritar).
-    colunas_extras = request.args.get('colunas') == 'tudo'
 
     # P7 — aplica hierarquia geográfica como base antes dos filtros manuais
     ids_permitidos = get_filtro_localidade()
@@ -236,8 +235,7 @@ def gerenciar_coletores():
                            filtro_loc=filtro_loc,
                            filtro_status=filtro_status,
                            filtro_alcance=filtro_alcance,
-                           filtro_pendencia=filtro_pendencia,
-                           colunas_extras=colunas_extras)
+                           filtro_pendencia=filtro_pendencia)
 
 
 # ---------------------------------------------------------------------------
