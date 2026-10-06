@@ -28,8 +28,121 @@
         <input type="password" class="form-control" id="senha_confirmacao" name="senha_confirmacao"
                minlength="{{ senha_minima }}" required autocomplete="new-password">
     </div>
-    <button type="submit" class="btn-acao">
+    {# O botao NAO submete: abre os termos. A conta so nasce depois do aceite,
+       e o aceite entra na MESMA gravacao -- se fossem dois passos, uma queda
+       entre eles deixaria um administrador sem aceite nenhum. #}
+    <input type="hidden" name="aceito" id="campo-aceito" value="">
+    <button type="button" class="btn-acao" id="btn-abrir-termos">
         <i class="fa-solid fa-user-shield me-2"></i>{{ t('primeiro.btn_criar') }}
     </button>
 </form>
+
+{# ── Termos de uso ─────────────────────────────────────────────────────── #}
+<div class="modal fade" id="modalTermos" tabindex="-1" data-bs-backdrop="static"
+     aria-labelledby="tituloTermos">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="tituloTermos">{{ t_mod.TITULO }}</h5>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small">{{ t_mod.INTRODUCAO }}</p>
+        {% set caixa_id = 'caixa-termos-modal' %}
+        {% set altura = '50vh' %}
+        {% include '_termos_corpo.html' with context %}
+      </div>
+      <div class="modal-footer d-flex justify-content-between flex-wrap gap-2">
+        <small id="aviso-rolar-modal" class="text-muted">
+          <i class="fa-solid fa-arrow-down me-1"></i>{{ t_mod.AVISO_ROLAR }}
+        </small>
+        <div>
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+            {{ t('btn.cancelar') }}
+          </button>
+          <button type="button" class="btn btn-success" id="btn-aceitar-modal" disabled>
+            <i class="fa-solid fa-check me-1"></i>{{ t_mod.ROTULO_ACEITE }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+    var form   = document.querySelector('form');
+    var abrir  = document.getElementById('btn-abrir-termos');
+    var caixa  = document.getElementById('caixa-termos-modal');
+    var fim    = document.getElementById('caixa-termos-modal-fim');
+    var aceite = document.getElementById('btn-aceitar-modal');
+    var aviso  = document.getElementById('aviso-rolar-modal');
+    var campo  = document.getElementById('campo-aceito');
+    var caixaModal = document.getElementById('modalTermos');
+
+    // 🔴 A instância do modal é criada NO CLIQUE, não aqui. Este script roda
+    // no corpo da página, e o <script> do Bootstrap só vem antes do </body>:
+    // criar a instância agora dá "bootstrap is not defined", o botão não faz
+    // nada, e a página parece apenas travada. Nenhum teste de servidor pega —
+    // para ele o modal está na página.
+    var modal = null;
+    function abrirModal() {
+        if (!modal) { modal = new bootstrap.Modal(caixaModal); }
+        modal.show();
+    }
+
+    function liberar() {
+        aceite.disabled = false;
+        aviso.innerHTML = '<i class="fa-solid fa-circle-check me-1"></i>' +
+                          {{ t('termos.pode_aceitar') | tojson }};
+        aviso.classList.remove('text-muted');
+        aviso.classList.add('text-success');
+    }
+
+    abrir.addEventListener('click', function () {
+        // Os campos do cadastro sao validados ANTES de mostrar os termos: ler
+        // tudo e so entao descobrir que a senha nao confere seria cruel.
+        if (!form.reportValidity()) { return; }
+        abrirModal();
+    });
+
+    // 🔴 A deteccao so e ligada QUANDO O MODAL ABRE. Montada antes, com o
+    // modal escondido, a caixa tem altura zero: o IntersectionObserver nunca
+    // dispara e o botao fica desabilitado para sempre, mesmo rolando ate o fim.
+    // Foi o que aconteceu — rolar nao liberava nada, e o aviso continuava
+    // pedindo para rolar. Um teste de servidor nao veria: o HTML esta certo.
+    var ligado = false;
+    caixaModal.addEventListener('shown.bs.modal', function () {
+        // Texto curto ou tela alta: o fim ja esta visivel e nunca haveria
+        // rolagem. Sem isto ninguem conseguiria criar o administrador, e o
+        // sistema nasceria inacessivel.
+        if (caixa.scrollHeight <= caixa.clientHeight + 2) { liberar(); return; }
+        if (ligado) { return; }
+        ligado = true;
+
+        // Observa o marcador do FIM, nao a posicao em pixels: funciona com
+        // zoom, com fonte aumentada e em tela de celular.
+        if ('IntersectionObserver' in window) {
+            var obs = new IntersectionObserver(function (e) {
+                if (e.some(function (x) { return x.isIntersecting; })) {
+                    liberar(); obs.disconnect();
+                }
+            }, { root: caixa, threshold: 1.0 });
+            obs.observe(fim);
+        }
+        // O ouvinte de rolagem fica SEMPRE, nao so como alternativa: se o
+        // observer falhar por qualquer motivo, este e o caminho de volta — e o
+        // custo de ter os dois e zero, porque `liberar` e idempotente.
+        caixa.addEventListener('scroll', function () {
+            if (caixa.scrollTop + caixa.clientHeight >= caixa.scrollHeight - 24) {
+                liberar();
+            }
+        });
+    });
+
+    aceite.addEventListener('click', function () {
+        campo.value = 'sim';
+        form.submit();
+    });
+})();
+</script>
 {% endblock %}

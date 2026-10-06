@@ -137,9 +137,11 @@ def test_primeiro_acesso_sem_o_token_nao_existe(client, instalacao_vazia):
 def test_primeiro_acesso_cria_o_administrador(client, instalacao_vazia):
     resp = client.post(f'/primeiro-acesso/{instalacao_vazia}',
                        data={'nome': 'Joana TI', 'email': 'Joana@MB.com',
-                             'senha': 'escolhida1', 'senha_confirmacao': 'escolhida1'})
+                             'senha': 'escolhida1', 'senha_confirmacao': 'escolhida1',
+                             'aceito': 'sim'})      # os termos vêm no mesmo POST
     assert resp.status_code == 302
     admin = Usuario.query.one()
+    assert admin.termos_aceitos_em is not None,         'o aceite tem de ser gravado na mesma transação que cria a conta'
     assert admin.grupo.nome == 'TI'
     assert admin.nivel_acesso == 'GLOBAL'
     assert admin.email == 'joana@mb.com'
@@ -149,7 +151,8 @@ def test_primeiro_acesso_cria_o_administrador(client, instalacao_vazia):
 
 def test_token_vale_uma_vez(client, instalacao_vazia):
     dados = {'nome': 'Joana TI', 'email': 'joana@mb.com',
-             'senha': 'escolhida1', 'senha_confirmacao': 'escolhida1'}
+             'senha': 'escolhida1', 'senha_confirmacao': 'escolhida1',
+             'aceito': 'sim'}
     client.post(f'/primeiro-acesso/{instalacao_vazia}', data=dados)
     segunda = client.post(f'/primeiro-acesso/{instalacao_vazia}',
                           data=dict(dados, email='outro@mb.com'))
@@ -212,6 +215,12 @@ def test_com_senha_provisoria_so_abre_a_troca(client):
 
 
 def test_troca_libera_a_navegacao(client):
+    """🔴 A ordem é: trocar a senha, DEPOIS aceitar os termos.
+
+    O aceite exigido antes da troca seria feito com a senha que a TI definiu —
+    e que a TI conhece. Um aceite assim o próprio dono pode contestar. Com a
+    senha já trocada, só ele poderia ter clicado.
+    """
     u = _usuario('BALCAO', re='6003', provisoria=True)
     _entrar(client, u.email, 'segredo12')
     resp = client.post('/trocar-senha', data={'senha_nova': 'minhaSenha9',
@@ -220,6 +229,15 @@ def test_troca_libera_a_navegacao(client):
     db.session.refresh(u)
     assert u.senha_provisoria is False
     assert check_password_hash(u.senha_hash, 'minhaSenha9')
+
+    # Senha trocada, termos ainda não: a navegação cai no aceite.
+    desviado = client.get('/operacao')
+    assert desviado.status_code == 302
+    assert desviado.headers['Location'].endswith('/termos')
+
+    client.post('/termos', data={'aceito': 'sim'})
+    db.session.refresh(u)
+    assert u.termos_aceitos_em is not None
     assert client.get('/operacao').status_code == 200
 
 

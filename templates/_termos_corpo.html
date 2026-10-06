@@ -1,0 +1,20 @@
+{# O TEXTO dos termos, incluido pela tela /termos e pelo modal do primeiro
+   acesso. Fica num arquivo so para os dois nao divergirem: dois lugares com o
+   mesmo texto viram dois textos diferentes na primeira correcao de virgula --
+   e aceite que mostra um texto e registra outro nao vale nada.
+
+   Quem inclui passa `caixa_id`, porque a mesma pagina pode ter os dois. #}
+<div id="{{ caixa_id }}"
+     style="max-height: {{ altura|default('46vh') }}; overflow-y: auto;
+            border: 1px solid var(--bs-border-color); border-radius: .5rem;
+            padding: 1rem 1.25rem; background: var(--bs-body-bg);">
+    {% for titulo, corpo in t_mod.CLAUSULAS %}
+    <h2 class="h6 fw-bold mt-3">{{ titulo }}</h2>
+    <p class="small text-muted">{{ corpo }}</p>
+    {% endfor %}
+
+    <p class="small fw-bold mt-4 mb-0">{{ t_mod.FECHO }}</p>
+    {# Marcador do fim: e a chegada DELE a tela que libera o aceite. Medir
+       scroll em pixels erra com zoom, com fonte grande e no celular. #}
+    <div id="{{ caixa_id }}-fim" style="height:1px;"></div>
+</div>

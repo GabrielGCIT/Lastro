@@ -27,6 +27,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import db
 from app.models import Usuario
+from app import termos as _termos
 from app.helpers import (registrar_log, normalizar_email, email_valido, login_required,
                          problema_na_senha, SENHA_MINIMA, instalacao_sem_usuario,
                          token_primeiro_acesso_confere, criar_administrador)
@@ -220,16 +221,31 @@ def primeiro_acesso(token):
         if problema:
             flash(problema, 'danger')
             return render_template('primeiro_acesso.html', token=token,
-                                   senha_minima=SENHA_MINIMA)
+                                   senha_minima=SENHA_MINIMA, t_mod=_termos)
+
+        # 🔴 O servidor não acredita na tela: o botão do modal só acende
+        # depois de rolar, mas um POST montado à mão pularia isso. Sem aceite,
+        # não há administrador — e o sistema continua sem ninguém dentro.
+        if request.form.get('aceito') != 'sim':
+            flash('É preciso aceitar os termos de uso para criar o administrador.',
+                  'warning')
+            return render_template('primeiro_acesso.html', token=token,
+                                   senha_minima=SENHA_MINIMA, t_mod=_termos)
 
         admin = criar_administrador(nome, email, senha)
+        # Mesma transação da criação: se fossem dois passos, uma queda entre
+        # eles deixaria o administrador existindo sem aceite nenhum.
+        _termos.registrar_aceite(admin)
         session.clear()
         session['nome'] = admin.nome
         session['re']   = admin.re
         session['empresa_id'] = admin.empresa_id
-        registrar_log('PRIMEIRO_ACESSO', f'Administrador {admin.nome} ({email}) criado.')
+        registrar_log('PRIMEIRO_ACESSO',
+                      f'Administrador {admin.nome} ({email}) criado. '
+                      f'Termos de uso versao {_termos.VERSAO} aceitos.')
         session.clear()
         flash('Administrador criado. Entre com o e-mail e a senha que você escolheu.', 'success')
         return redirect(url_for('auth.login'))
 
-    return render_template('primeiro_acesso.html', token=token, senha_minima=SENHA_MINIMA)
+    return render_template('primeiro_acesso.html', token=token,
+                           senha_minima=SENHA_MINIMA, t_mod=_termos)

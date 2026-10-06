@@ -229,6 +229,13 @@ def test_filtro_de_cd_fora_do_escopo_nao_amplia(app, inventario):
     db.session.add(preso)
     db.session.commit()
 
+    # Este usuário vai OPERAR o sistema, e no fluxo real ninguém opera sem ter
+    # aceitado os termos. Quem exercita a guarda do aceite é
+    # tests/test_l8_termos.py, com um usuário sem aceite de propósito.
+    from app.termos import registrar_aceite
+    registrar_aceite(preso)
+    db.session.commit()
+
     c = app.test_client()
     with c.session_transaction() as s:
         s['user_id'], s['nome'], s['re'] = preso.id, preso.nome, preso.re

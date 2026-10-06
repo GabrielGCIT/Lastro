@@ -485,6 +485,12 @@ class Usuario(db.Model):
     # até o dono trocar, o sistema só deixa abrir a tela de troca. Quem conhece a
     # senha de alguém não deveria poder agir como ele.
     senha_provisoria        = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+    # Aceite dos termos de uso: QUANDO e de QUAL versão.
+    # 🔴 A versão não é detalhe: sem ela, "aceitou em tal data" não diz o que a
+    # pessoa aceitou. Se o texto mudar, quem aceitou a versão anterior volta a
+    # ver a tela — ninguém concorda retroativamente com um texto que não leu.
+    termos_aceitos_em       = db.Column(db.DateTime, nullable=True)
+    termos_versao           = db.Column(db.String(10), nullable=True)
     # Lockout de brute force: contador de falhas dentro da janela temporal +
     # instante do bloqueio. Zerados no login bem-sucedido e no reset de senha.
     login_tentativas        = db.Column(db.Integer,  nullable=False, default=0, server_default='0')

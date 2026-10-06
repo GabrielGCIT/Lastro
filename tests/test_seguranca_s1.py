@@ -21,6 +21,13 @@ from app.models import (
 
 
 def _cliente_logado(app, user):
+    # Termos aceitos: o helper representa alguem OPERANDO o sistema, e no
+    # fluxo real ninguem opera sem ter aceitado (ver tests/test_l8_termos.py,
+    # que exercita a guarda com um usuario SEM aceite).
+    from app.termos import precisa_aceitar, registrar_aceite
+    if precisa_aceitar(user):
+        registrar_aceite(user)
+        db.session.commit()
     c = app.test_client()
     with c.session_transaction() as s:
         s['user_id']      = user.id

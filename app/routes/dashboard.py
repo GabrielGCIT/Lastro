@@ -1111,6 +1111,37 @@ def gerenciar_usuarios():
                            senha_minima=SENHA_MINIMA)
 
 
+@dashboard_bp.route('/termos', methods=['GET', 'POST'])
+@login_required
+def termos():
+    """Mostra os termos e registra o aceite.
+
+    Sem `permissao_required`: é condição de uso do sistema, vale para todo
+    mundo. O POST só é aceito com o campo de confirmação — o botão fica
+    desabilitado até a pessoa rolar o texto, mas um POST montado à mão pularia
+    isso, e o servidor não acredita na tela.
+    """
+    from app import termos as t_mod
+    from app.models import Usuario
+
+    usuario = db.session.get(Usuario, session.get('user_id'))
+
+    if request.method == 'POST':
+        if request.form.get('aceito') != 'sim':
+            flash('É preciso aceitar os termos para usar o sistema.', 'warning')
+            return redirect(url_for('dashboard.termos'))
+
+        t_mod.registrar_aceite(usuario)
+        registrar_log('TERMOS_ACEITE',
+                      f'{usuario.nome} aceitou os termos de uso '
+                      f'versao {t_mod.VERSAO}.')
+        db.session.commit()
+        return redirect(url_for('dashboard.index'))
+
+    return render_template('termos.html', t_mod=t_mod,
+                           ja_aceitou=not t_mod.precisa_aceitar(usuario))
+
+
 @dashboard_bp.route('/sobre')
 @login_required
 def sobre():

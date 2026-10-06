@@ -47,7 +47,17 @@ def app():
     with application.app_context():
         executar_startup()
         from app.helpers import criar_administrador
-        criar_administrador('Administrador TI', ADMIN_EMAIL, ADMIN_SENHA)
+        from app.termos import registrar_aceite
+        admin = criar_administrador('Administrador TI', ADMIN_EMAIL, ADMIN_SENHA)
+        # 🔴 O administrador nasce com os termos JÁ aceitos, porque é o estado
+        # normal de quem está usando o sistema: no fluxo real, o aceite
+        # acontece na mesma gravação que cria a conta. Sem isto, o hook
+        # `_exigir_aceite_dos_termos` redirecionaria TODOS os testes para a
+        # tela de aceite — o que aconteceu, e é a prova de que a guarda morde.
+        # Quem testa a guarda cria um usuário sem aceite de propósito
+        # (tests/test_l8_termos.py).
+        registrar_aceite(admin)
+        db.session.commit()
         yield application
         db.session.remove()
 
@@ -101,6 +111,17 @@ def cliente_logado(app):
     `c = cliente_logado(du.userA)`.
     """
     def _make(user):
+        # 🔴 Marca os termos como aceitos: esta fábrica representa alguém
+        # OPERANDO o sistema, e no fluxo real ninguém chega a operar sem ter
+        # aceitado. Sem isto o hook `_exigir_aceite_dos_termos` redireciona
+        # todo teste para a tela de aceite — foi o que aconteceu quando a
+        # guarda entrou, e é a prova de que ela morde.
+        # Quem testa a guarda monta o cliente à mão (tests/test_l8_termos.py).
+        from app.termos import precisa_aceitar, registrar_aceite
+        if precisa_aceitar(user):
+            registrar_aceite(user)
+            db.session.commit()
+
         c = app.test_client()
         with c.session_transaction() as s:
             s['user_id']      = user.id

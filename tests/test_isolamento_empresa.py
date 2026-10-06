@@ -21,6 +21,13 @@ def _cliente_logado(app, user):
     Para rotas não-/api/ o _sync_permissoes re-sincroniza tudo do banco; os
     campos de tenant abaixo cobrem também as rotas sob /api/ (que o hook ignora).
     """
+    # Termos aceitos: o helper representa alguem OPERANDO o sistema, e no
+    # fluxo real ninguem opera sem ter aceitado (ver tests/test_l8_termos.py,
+    # que exercita a guarda com um usuario SEM aceite).
+    from app.termos import precisa_aceitar, registrar_aceite
+    if precisa_aceitar(user):
+        registrar_aceite(user)
+        db.session.commit()
     c = app.test_client()
     with c.session_transaction() as s:
         s['user_id']      = user.id

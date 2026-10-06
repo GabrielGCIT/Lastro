@@ -1,0 +1,82 @@
+{% extends "base_cartao.html" %}
+{% block title %}{{ t_mod.TITULO }}{% endblock %}
+
+{% block content %}
+{% set caixa_id = 'caixa-termos' %}
+{# O botao de aceitar nasce DESABILITADO e so acende quando o texto chega ao
+   fim. Um "li e aceito" que se clica sem rolar e uma mentira que o sistema
+   registraria como verdade; rolar nao garante leitura -- nada garante --, mas
+   garante que o texto passou pela tela. O incomodo e proposital.
+
+   O servidor nao acredita nisto: a rota confere o campo de confirmacao, porque
+   um POST montado a mao pularia a tela inteira. #}
+<div class="text-center mb-3">
+    <h1 class="h4 fw-bold mb-1">{{ t_mod.TITULO }}</h1>
+    <p class="text-muted small mb-0">{{ t_mod.INTRODUCAO }}</p>
+</div>
+
+{% include '_termos_corpo.html' with context %}
+
+<form method="POST" class="mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="aceito" value="sim">
+
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <small id="aviso-rolar" class="text-muted">
+            <i class="fa-solid fa-arrow-down me-1"></i>{{ t_mod.AVISO_ROLAR }}
+        </small>
+        <button type="submit" id="btn-aceitar" class="btn btn-success" disabled>
+            <i class="fa-solid fa-check me-1"></i>{{ t_mod.ROTULO_ACEITE }}
+        </button>
+    </div>
+</form>
+
+<div class="text-center mt-3">
+    <a href="{{ url_for('auth.logout') }}" class="small text-muted">
+        {{ t('termos.sair') }}
+    </a>
+</div>
+
+<script>
+(function () {
+    var caixa  = document.getElementById('caixa-termos');
+    var fim    = document.getElementById('caixa-termos-fim');
+    var botao  = document.getElementById('btn-aceitar');
+    var aviso  = document.getElementById('aviso-rolar');
+
+    function liberar() {
+        botao.disabled = false;
+        aviso.innerHTML = '<i class="fa-solid fa-circle-check me-1"></i>' +
+                          {{ t('termos.pode_aceitar') | tojson }};
+        aviso.classList.remove('text-muted');
+        aviso.classList.add('text-success');
+    }
+
+    // IntersectionObserver olha o marcador do FIM, não a posição em pixels:
+    // funciona com zoom, com fonte aumentada e em tela de celular.
+    if ('IntersectionObserver' in window) {
+        var observador = new IntersectionObserver(function (entradas) {
+            if (entradas.some(function (e) { return e.isIntersecting; })) {
+                liberar();
+                observador.disconnect();
+            }
+        }, { root: caixa, threshold: 1.0 });
+        observador.observe(fim);
+    } else {
+        // Navegador antigo: cai no cálculo de rolagem, com folga de 24px.
+        caixa.addEventListener('scroll', function () {
+            if (caixa.scrollTop + caixa.clientHeight >= caixa.scrollHeight - 24) {
+                liberar();
+            }
+        });
+    }
+
+    // 🔴 Texto curto, ou tela alta: o fim já está visível e nunca haveria
+    // rolagem. Sem isto o botão ficaria desabilitado para sempre e a pessoa
+    // não conseguiria entrar no sistema.
+    window.addEventListener('load', function () {
+        if (caixa.scrollHeight <= caixa.clientHeight + 2) { liberar(); }
+    });
+})();
+</script>
+{% endblock %}

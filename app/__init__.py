@@ -233,6 +233,43 @@ def create_app(database_url=None):
             return _jsonify({'ok': False, 'erro': 'Troque a senha provisória antes de continuar.'}), 403
         return _redirect(_url_for('auth.trocar_senha'))
 
+    @app.before_request
+    def _exigir_aceite_dos_termos():
+        """Sem aceite da versão atual dos termos, o sistema não abre.
+
+        🔴 A ordem é trocar a senha primeiro, aceitar depois. Um aceite feito
+        com a senha que a TI definiu — e que a TI conhece — é um aceite que o
+        próprio dono pode contestar. Com a senha já trocada, só ele poderia ter
+        clicado.
+
+        Isso é garantido DUAS vezes, e descobri que são duas ao tentar sabotar:
+          1. este hook é registrado depois do de senha, e o Flask roda os
+             `before_request` na ordem de registro, parando no primeiro que
+             responde;
+          2. a condição abaixo sai de letra quando a senha está pendente.
+        Derrubar uma delas sozinha não muda o comportamento — a outra cobre.
+        Mantenho as duas: a de cima depende da ordem das linhas num arquivo, que
+        é o tipo de coisa que uma refatoração reordena sem perceber.
+        """
+        from flask import (jsonify as _jsonify, redirect as _redirect,
+                           request as _r, session as _s, url_for as _url_for)
+        from app.models import Usuario
+        from app.termos import precisa_aceitar
+
+        if not _s.get('user_id') or _s.get('senha_provisoria'):
+            return
+        if _r.endpoint in ('static', 'auth.logout', 'dashboard.termos',
+                           'auth.trocar_senha', None):
+            return
+
+        usuario = db.session.get(Usuario, _s.get('user_id'))
+        if not precisa_aceitar(usuario):
+            return
+        if _r.path.startswith('/api/'):
+            return _jsonify({'ok': False,
+                             'erro': 'Aceite os termos de uso antes de continuar.'}), 403
+        return _redirect(_url_for('dashboard.termos'))
+
     @app.context_processor
     def inject_globals():
         """Injeta variáveis globais disponíveis em todos os templates Jinja.
