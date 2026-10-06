@@ -253,3 +253,47 @@ def test_o_arquivo_que_a_tarefa_executa_existe(pacote):
         conteudo = fh.read()
     assert '%~dp0run.py' in conteudo, 'o .bat não chama o sistema'
     assert 'cd /d "%~dp0"' in conteudo,         'sem o cd, o banco e os uploads seriam procurados na pasta errada'
+
+
+# ---------------------------------------------------------------------------
+# COMPONENTES COMPILADOS: O PACOTE SÓ SERVE SE COBRIR A VERSÃO DO CLIENTE
+# ---------------------------------------------------------------------------
+
+def test_o_leiame_so_promete_versoes_que_o_pacote_cobre(pacote):
+    """🔴 O pacote prometia "Python 3.10 ou mais novo" e trazia componentes de
+    UMA versão só — a da máquina onde foi montado.
+
+    Falhou na primeira instalação fora daqui, com "No matching distribution
+    found for SQLAlchemy". SQLAlchemy, greenlet e MarkupSafe são compilados por
+    versão do Python, e o pip não tinha o arquivo que servia.
+
+    Este teste prende a promessa ao que o empacotador realmente baixa: as duas
+    listas saem da mesma constante, e o LEIAME deixou de dizer "ou mais novo".
+    """
+    with open(os.path.join(pacote, 'LEIAME.txt'), encoding='utf-8') as fh:
+        leiame = fh.read()
+
+    for versao in empacotar.PYTHONS_SUPORTADOS:
+        assert versao in leiame, f'o LEIAME não cita o Python {versao}'
+    assert 'ou mais novo' not in leiame, \
+        'o LEIAME voltou a prometer versões que o pacote não cobre'
+
+
+def test_a_mensagem_de_erro_fala_da_versao_do_python(pacote):
+    """🔴 A mensagem antiga mandava conferir a pasta `dependencias` — que
+    estava lá. Mandar a pessoa procurar a coisa errada custa a tarde dela."""
+    with open(os.path.join(pacote, 'instalar.bat'), encoding='utf-8') as fh:
+        script = fh.read()
+
+    assert 'python --version' in script.lower(), \
+        'a mensagem de erro não mostra qual Python a máquina tem'
+    for versao in empacotar.PYTHONS_SUPORTADOS:
+        assert versao in script, f'a mensagem não cita o Python {versao}'
+
+
+def test_as_versoes_suportadas_incluem_as_usadas_hoje():
+    """Uma lista vazia ou curta passaria nos dois testes acima — eles comparam
+    a promessa com a própria lista."""
+    assert len(empacotar.PYTHONS_SUPORTADOS) >= 4
+    assert '3.12' in empacotar.PYTHONS_SUPORTADOS   # a desta máquina
+    assert empacotar.PLATAFORMA == 'win_amd64'      # Windows Server 64 bits

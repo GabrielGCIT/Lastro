@@ -69,24 +69,53 @@ def _copiar(destino):
         shutil.copy2(origem, os.path.join(destino, arquivo))
 
 
+# Versões de Python que o pacote aceita na máquina de destino. Precisa bater
+# com o que o LEIAME promete — se o texto diz "3.10 ou mais novo", as cinco
+# precisam estar aqui.
+#
+# 🔴 Isto existe porque o pacote QUEBRAVA fora da máquina onde foi montado.
+# SQLAlchemy, greenlet e MarkupSafe trazem código compilado: o .whl é específico
+# da versão do Python ("cp312" = CPython 3.12). Baixando só para a versão local,
+# o instalador morria na máquina do cliente com "No matching distribution found"
+# — e a mensagem mandava procurar a pasta `dependencias`, que estava lá.
+PYTHONS_SUPORTADOS = ['3.10', '3.11', '3.12', '3.13', '3.14']
+PLATAFORMA = 'win_amd64'
+
+
 def _baixar_dependencias(destino):
-    """Guarda os .whl dentro do pacote.
+    """Guarda os .whl dentro do pacote, para TODAS as versões suportadas.
 
     `--only-binary=:all:` recusa pacote que só vem como código-fonte: aquele
     precisaria de compilador na máquina de destino, que um Windows Server não
     tem. Melhor descobrir isso aqui do que no dia da instalação.
+
+    Uma rodada por versão, tudo na mesma pasta. Na instalação o pip escolhe o
+    arquivo que serve para o Python daquela máquina; os outros ficam ignorados.
+    O custo é alguns MB a mais no pacote — barato perto de uma instalação que
+    não acontece.
     """
     pasta = os.path.join(destino, 'dependencias')
     os.makedirs(pasta, exist_ok=True)
-    comando = [sys.executable, '-m', 'pip', 'download',
-               '-r', os.path.join(RAIZ, 'requirements.txt'),
-               '-d', pasta, '--only-binary=:all:']
+    reqs = os.path.join(RAIZ, 'requirements.txt')
+
     print('[1/3] Baixando as dependencias (so aqui, uma vez)...')
-    resultado = subprocess.run(comando, capture_output=True, text=True)
-    if resultado.returncode != 0:
-        print(resultado.stdout[-2000:])
-        print(resultado.stderr[-2000:])
-        raise SystemExit('ERRO: nao consegui baixar as dependencias.')
+    faltaram = []
+    for versao in PYTHONS_SUPORTADOS:
+        comando = [sys.executable, '-m', 'pip', 'download', '-r', reqs,
+                   '-d', pasta, '--only-binary=:all:',
+                   '--platform', PLATAFORMA, '--python-version', versao]
+        resultado = subprocess.run(comando, capture_output=True, text=True)
+        if resultado.returncode != 0:
+            faltaram.append(versao)
+            print(f'      [AVISO] sem componentes para Python {versao}')
+        else:
+            print(f'      Python {versao}: ok')
+
+    if faltaram == PYTHONS_SUPORTADOS:
+        raise SystemExit('ERRO: nao consegui baixar as dependencias de nenhuma versao.')
+    if faltaram:
+        print(f'      ATENCAO: o pacote NAO instala em Python {", ".join(faltaram)}.')
+
     whls = [f for f in os.listdir(pasta) if f.endswith('.whl')]
     if not whls:
         raise SystemExit('ERRO: nenhum .whl foi baixado.')
@@ -138,8 +167,25 @@ echo [2/3] Instalando os componentes ^(sem internet^)...
 "%~dp0venv\\Scripts\\python.exe" -m pip install --quiet --no-index ^
     --find-links "%~dp0dependencias" -r "%~dp0requirements.txt"
 if errorlevel 1 (
+    rem 🔴 A mensagem antiga mandava procurar a pasta "dependencias" — que
+    rem estava la. A causa real quase sempre e outra: a versao do Python desta
+    rem maquina nao esta entre as que o pacote traz. Componentes como o
+    rem SQLAlchemy sao compilados POR versao, e o erro do pip fala em
+    rem "No matching distribution found" sem dizer o porque. Mandar a pessoa
+    rem conferir a coisa errada custa a tarde dela.
+    echo.
     echo [ERRO] Nao consegui instalar os componentes.
-    echo    A pasta "dependencias" veio junto com este instalador?
+    echo.
+    echo    O Python desta maquina e:
+    python --version
+    echo.
+    echo    Este pacote traz componentes para Python VERSOES_SUPORTADAS.
+    echo    Se a versao acima nao estiver nessa lista, instale uma delas
+    echo    e rode este arquivo de novo.
+    echo.
+    echo    Se a versao estiver na lista, confira se a pasta "dependencias"
+    echo    veio junto e esta completa.
+    echo.
     pause
     exit /b 1
 )
@@ -155,6 +201,10 @@ echo ==========================================================
 echo.
 pause
 '''
+    # A lista de versões vem de um lugar só: se PYTHONS_SUPORTADOS mudar,
+    # a mensagem muda junto. Texto duplicado é texto que envelhece torto.
+    conteudo = conteudo.replace('VERSOES_SUPORTADAS',
+                                ', '.join(PYTHONS_SUPORTADOS))
     _gravar(os.path.join(destino, 'instalar.bat'), conteudo)
 
 
@@ -337,7 +387,9 @@ pause
 
 
 def _escrever_leiame(destino, versao):
-    conteudo = f'''Lastro {versao}
+    # rf-string: o texto tem caminhos do Windows, e `C:\caminho` sem o `r`
+    # vira sequência de escape inválida — hoje é só um aviso, amanhã é erro.
+    conteudo = rf'''Lastro {versao}
 Controle de coletores do CD
 
 COMO INSTALAR
@@ -351,7 +403,9 @@ PARA SUBIR SOZINHO QUANDO O SERVIDOR LIGAR
   Execute  instalar-servico.bat  como administrador.
 
 O QUE PRECISA TER NA MAQUINA
-  Python 3.10 ou mais novo, com "Add Python to PATH" marcado.
+  Python VERSOES_SUPORTADAS (64 bits), com "Add Python to PATH" marcado.
+  Outras versoes nao servem: os componentes que acompanham este pacote
+  sao compilados para essas.
   Mais nada. Nenhum componente e baixado da internet: tudo que o sistema
   precisa esta na pasta "dependencias".
 
@@ -389,6 +443,8 @@ ATUALIZAR DEPOIS
   O banco, as fotos e os backups nao sao tocados. A versao anterior fica
   guardada em "versao-anterior", caso precise voltar.
 '''
+    conteudo = conteudo.replace('VERSOES_SUPORTADAS',
+                                ', '.join(PYTHONS_SUPORTADOS))
     _gravar(os.path.join(destino, 'LEIAME.txt'), conteudo)
 
 
