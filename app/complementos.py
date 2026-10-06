@@ -301,12 +301,25 @@ def ler_selecoes_do_form(form):
     Formato achatado de propósito: o form da retirada é montado por JS num campo
     por complemento, e nomear por id evita depender da ordem dos campos — que é a
     fonte clássica de bug quando o operador troca a seleção antes de enviar.
+
+    🔴 A categoria repetida na lista é DESCARTADA. Quantidade, item e dispensa
+    vêm de campos nomeados por categoria e lidos com `form.get()`, ou seja, um
+    valor só — então a categoria repetida não descreve duas peças diferentes,
+    descreve a MESMA seleção duas vezes. Sem o descarte, cada repetição virava
+    uma linha de saída: `complemento_categoria=1` duas vezes com `qtd_1=2` dava
+    4 baterias em 2 linhas, e a devolução mostrava "BATERIA PADRAO" duplicado
+    para o operador conferir. Pela tela isso não acontece (o popup monta um
+    campo por categoria); num POST montado à mão, acontece.
     """
     selecoes = []
+    vistas = set()   # pelo id JÁ convertido: '1' e '01' são a mesma categoria
     for bruto in form.getlist('complemento_categoria'):
         if not str(bruto).isdigit():
             continue
         cid = int(bruto)
+        if cid in vistas:
+            continue
+        vistas.add(cid)
         qtd_bruta = form.get(f'complemento_qtd_{cid}')
         item_bruto = form.get(f'complemento_item_{cid}')
         selecoes.append({

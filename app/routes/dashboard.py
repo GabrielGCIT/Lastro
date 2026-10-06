@@ -21,7 +21,7 @@ from sqlalchemy import func, case
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app import db, FOTO_FOLDER, CRACHA_FOLDER, ALLOWED_IMG_EXTENSIONS
-from app.models import (Coletor, Movimentacao, LogAuditoria,
+from app.models import (Coletor, Movimentacao, LogAuditoria, Colaborador,
                         Usuario, Localidade, Grupo, Permissao, NIVEIS_ACESSO,
                         STATUS_FORA_DE_OPERACAO, STATUS_INDISPONIVEIS)
 from app.helpers import (login_required, permissao_required, registrar_log,
@@ -141,8 +141,16 @@ def historico_completo():
     isso ser lento, o próximo passo é adicionar paginação com page/per_page ou
     filtros por período no próprio template.
     """
+    from sqlalchemy.orm import selectinload
+
     ids_permitidos = get_filtro_localidade()
-    q = Movimentacao.query.join(Coletor, Movimentacao.coletor_id == Coletor.id)
+    # 🔴 selectinload nos DOIS: o template lê `m.coletor.rotulo` em toda linha e
+    # agora lê também o nome do colaborador. Sem isso são até 500 linhas × 2
+    # queries lazy — mil idas ao banco para montar uma tela de leitura.
+    q = (Movimentacao.query
+         .options(selectinload(Movimentacao.coletor),
+                  selectinload(Movimentacao.colaborador))
+         .join(Coletor, Movimentacao.coletor_id == Coletor.id))
     if ids_permitidos is None:
         pass  # GLOBAL — vê tudo
     elif ids_permitidos:
@@ -344,7 +352,23 @@ def relatorio_operacional():
         for c, _ in top_coletores
     ]
     grafico_coletores_dados  = [int(qtd) for _, qtd in top_coletores]
-    grafico_colab_labels     = [re for re, _ in top_colaboradores]
+    # 🔴 O eixo mostrava a MATRÍCULA. Num gráfico que a gerência olha para
+    # decidir, "20101" não diz nada — e quem lê teria de abrir a lista de
+    # colaboradores para traduzir barra por barra. O agrupamento continua pelo
+    # RE (identificador estável, e movimentação antiga só tem ele); o nome entra
+    # só na hora de rotular, numa consulta a mais com os 10 REs do topo.
+    _res_topo = [re for re, _ in top_colaboradores]
+    _nomes = {}
+    if _res_topo:
+        _nomes = {
+            c.re: c.nome for c in
+            Colaborador.query.filter(Colaborador.re.in_(_res_topo))
+            .filter(criterio_empresa(Colaborador.empresa_id)).all()
+        }
+    grafico_colab_labels = [
+        (_nomes[re][:20] if re in _nomes else f'RE {re}')
+        for re, _ in top_colaboradores
+    ]
     grafico_colab_dados      = [int(qtd) for _, qtd in top_colaboradores]
 
     return render_template('relatorio_operacional.html',

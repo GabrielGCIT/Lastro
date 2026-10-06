@@ -31,7 +31,18 @@
                                 {{ m.coletor.rotulo }}
                             </a>
                         </td>
-                        <td>{{ m.re_colaborador }}</td>
+                        {# O RE sozinho não responde "quem pegou": quem lê esta tela
+                           teria de ir à lista de colaboradores para saber. O nome vem
+                           na frente e o RE fica como o identificador que ele é. Nas
+                           movimentações antigas, anteriores ao vínculo, só há o RE. #}
+                        <td>
+                            {% if m.colaborador %}
+                                {{ m.colaborador.nome }}
+                                <span class="text-muted small d-block">RE {{ m.colaborador.re }}</span>
+                            {% else %}
+                                <span class="text-muted">RE {{ m.re_colaborador }}</span>
+                            {% endif %}
+                        </td>
                         <td>{{ m.data_saida.strftime('%d/%m/%Y %H:%M') }}</td>
                         <td>
                             {% if m.data_retorno %}
