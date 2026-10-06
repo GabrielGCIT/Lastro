@@ -22,8 +22,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from app import db, FOTO_FOLDER, CRACHA_FOLDER, ALLOWED_IMG_EXTENSIONS
 from app.models import (Coletor, Movimentacao, LogAuditoria,
-                        Usuario, Localidade, Grupo, Permissao, America,
-                        Pais, STATUS_FORA_DE_OPERACAO, STATUS_INDISPONIVEIS)
+                        Usuario, Localidade, Grupo, Permissao, NIVEIS_ACESSO,
+                        STATUS_FORA_DE_OPERACAO, STATUS_INDISPONIVEIS)
 from app.helpers import (login_required, permissao_required, registrar_log,
                          get_filtro_localidade, empresa_visivel, criterio_empresa,
                          empresa_para_escrita, localidade_para_escrita, re_usuario_em_uso,
@@ -590,56 +590,23 @@ def foto_cracha_file(filename):
 # CONTEXTO MULTI-TENANCY
 # ---------------------------------------------------------------------------
 
-def _contexto_dentro_do_escopo(ctx: str, nivel: str) -> bool:
-    """Verifica se o contexto solicitado está dentro do escopo autorizado do usuário.
+def _contexto_valido(ctx: str) -> bool:
+    """True se o contexto tem um formato que este sistema sabe ler.
 
-    Chamada apenas para níveis AMERICA e PAIS — GLOBAL passa sem verificação.
-    Retorna False para contextos com formato inválido ou que referenciam entidades
-    fora do escopo do usuário.
-
-    Separada como função privada para manter trocar_contexto legível e para
-    facilitar testes unitários futuros sem precisar de request context completo.
+    Com a hierarquia geográfica fora, existem exatamente dois: todos os CDs, ou
+    um CD. Validar o FORMATO aqui não é preciosismo — uma string herdada
+    ("PAIS:BR") passaria pela checagem de empresa, seria gravada na sessão, e o
+    escopo cairia no fallback fail-closed: a pessoa veria zero coletores sem
+    nenhuma mensagem explicando por quê.
     """
-    america_id = session.get('america_id')
-    pais_id    = session.get('pais_id')
-
-    if nivel == 'PAIS':
-        if ctx.startswith('PAIS:'):
-            sigla = ctx.split(':', 1)[1]
-            # Verifica que a sigla pertence exatamente ao país vinculado ao usuário
-            return Pais.query.filter_by(sigla=sigla, id=pais_id).first() is not None
-
-        if ctx.startswith('CD:'):
-            try:
-                loc = db.session.get(Localidade, int(ctx.split(':', 1)[1]))
-                return loc is not None and loc.pais_id == pais_id
-            except (ValueError, TypeError):
-                return False
-
-        return False  # PAIS não pode setar AMERICA: nem GLOBAL
-
-    if nivel == 'AMERICA':
-        if ctx.startswith('AMERICA:'):
-            sigla = ctx.split(':', 1)[1]
-            return America.query.filter_by(sigla=sigla, id=america_id).first() is not None
-
-        if ctx.startswith('PAIS:'):
-            sigla = ctx.split(':', 1)[1]
-            pais  = Pais.query.filter_by(sigla=sigla).first()
-            return pais is not None and pais.america_id == america_id
-
-        if ctx.startswith('CD:'):
-            try:
-                loc  = db.session.get(Localidade, int(ctx.split(':', 1)[1]))
-                if loc is None or loc.pais_id is None:
-                    return False
-                pais = db.session.get(Pais, loc.pais_id)
-                return pais is not None and pais.america_id == america_id
-            except (ValueError, TypeError):
-                return False
-
-        return False  # AMERICA não pode setar GLOBAL
-
+    if ctx == 'GLOBAL':
+        return True
+    if ctx.startswith('CD:'):
+        try:
+            int(ctx.split(':', 1)[1])
+            return True
+        except (ValueError, IndexError):
+            return False
     return False
 
 
@@ -647,11 +614,9 @@ def _contexto_na_empresa(ctx: str) -> bool:
     """True se o contexto pedido é compatível com a empresa da sessão (T3).
 
     Vetor cross-tenant (classe do BUG P8c): um usuário GLOBAL da empresa X
-    poderia setar CD:<id de outra empresa> e passar a operar dados alheios. A
-    referência CD é a única que aponta uma localidade concreta, então é a que
-    precisa pertencer à empresa. PAIS:/AMERICA: são referências geográficas
-    COMPARTILHADAS entre empresas — a interseção com o base set da empresa no
-    get_filtro_localidade já garante o isolamento na leitura, então passam.
+    poderia setar CD:<id de outra empresa> e passar a operar dados alheios. CD é
+    a única referência que aponta uma localidade concreta, então é a que precisa
+    pertencer à empresa; GLOBAL é global DA empresa, recortado na leitura.
     """
     emp = session.get('empresa_id')
     if not emp:
@@ -662,7 +627,7 @@ def _contexto_na_empresa(ctx: str) -> bool:
         except (ValueError, TypeError):
             return False
         return loc is not None and loc.empresa_id == emp
-    return True  # PAIS:/AMERICA:/GLOBAL — isolados via base set na leitura
+    return True  # GLOBAL — recortado pelo base set da empresa na leitura
 
 
 @dashboard_bp.route('/contexto/trocar', methods=['POST'])
@@ -673,11 +638,11 @@ def trocar_contexto():
     O contexto é persistido na sessão Flask — não no banco. O usuário pode
     trocar dentro dos limites do seu nivel_acesso sem afetar outros usuários.
 
-    Segurança: o contexto é validado contra o escopo autorizado antes de ser
-    salvo. Sem isso, um usuário PAIS poderia enviar POST com contexto=PAIS:CR
-    e passar a ver dados de outro país (authorization bypass via form crafting).
-    GLOBAL não tem restrição de escopo — pode ver qualquer contexto.
-    Tentativas inválidas são rejeitadas com flash + log de auditoria.
+    Segurança: o contexto é validado antes de ser salvo — formato primeiro,
+    depois a empresa. Sem a checagem de empresa, um usuário GLOBAL da empresa X
+    mandaria CD:<id de outra empresa> e passaria a operar dados alheios
+    (authorization bypass via form crafting). Tentativa inválida é recusada com
+    flash e log de auditoria.
     """
     nivel = session.get('nivel_acesso', 'CD')
     if nivel == 'CD':
@@ -688,14 +653,11 @@ def trocar_contexto():
     if not novo_ctx:
         return redirect(request.referrer or url_for('dashboard.index'))
 
-    # GLOBAL pode setar qualquer contexto GEOGRÁFICO — sem restrição de escopo.
-    # Para AMERICA e PAIS, valida que o contexto pertence ao escopo do usuário.
-    if nivel != 'GLOBAL' and not _contexto_dentro_do_escopo(novo_ctx, nivel):
+    if not _contexto_valido(novo_ctx):
         registrar_log(
             'SECURITY_ALERT',
             f'{session.get("re")} tentou trocar contexto para "{novo_ctx}" '
-            f'(nivel={nivel}, america_id={session.get("america_id")}, '
-            f'pais_id={session.get("pais_id")})',
+            f'(formato desconhecido, nivel={nivel})',
         )
         flash('Essa opção está fora do que você pode ver.', 'danger')
         return redirect(request.referrer or url_for('dashboard.index'))
@@ -941,16 +903,12 @@ def gerenciar_usuarios():
         camara         = request.form.get('camara') or None
         turno          = request.form.get('turno') or None
         nivel_acesso   = request.form.get('nivel_acesso', 'CD') or 'CD'
-        america_id_raw = request.form.get('america_id') or None
-        pais_id_raw    = request.form.get('pais_id_scope') or None
-        try:
-            scope_america_id = int(america_id_raw) if america_id_raw else None
-        except (ValueError, TypeError):
-            scope_america_id = None
-        try:
-            scope_pais_id = int(pais_id_raw) if pais_id_raw else None
-        except (ValueError, TypeError):
-            scope_pais_id = None
+        # A coluna é String e aceita qualquer coisa; o escopo é fail-closed e
+        # cala. Juntando as duas, um nível fora da lista gravaria sem erro e
+        # produziria um usuário que entra e não enxerga nada. Recusa aqui.
+        if nivel_acesso not in NIVEIS_ACESSO:
+            flash('Nível de acesso inválido.', 'danger')
+            return redirect(url_for('dashboard.gerenciar_usuarios'))
 
         if not nome or not re:
             flash('Nome e RE são obrigatórios.', 'danger')
@@ -1007,22 +965,16 @@ def gerenciar_usuarios():
             flash('Este CD não está entre os que você acessa.', 'danger')
             return redirect(url_for('dashboard.gerenciar_usuarios'))
 
-        # 🔴 Os três níveis geográficos viram `set()` em `_escopo_geografico`
-        # quando o campo de escopo fica vazio, e `set()` fecha TODOS os módulos:
-        # o usuário entra, navega, e toda tela aparece sem uma linha sequer.
-        # Como o formulário nasce em "CD" com "— Sem localidade definida —",
-        # criar um usuário sem tocar em nada produz exatamente esse usuário cego.
-        # `localidade_para_escrita` devolve ok=True para vazio ("ausência
-        # legítima"), então a checagem acima não pegava o caso.
-        exigencia = {
-            'CD':      (loc_id,           'Escolha o CD deste usuário.'),
-            'PAIS':    (scope_pais_id,    'Escolha o país deste usuário.'),
-            'AMERICA': (scope_america_id, 'Escolha a região deste usuário.'),
-        }.get(nivel_acesso)
-        if exigencia and not exigencia[0]:
-            aviso = (exigencia[1] + ' Sem isso ele entra no sistema e não '
-                     'enxerga nenhum equipamento.')
-            flash(aviso, 'danger')
+        # 🔴 Nível CD sem CD vira `set()` em `_escopo_geografico`, e `set()`
+        # fecha TODOS os módulos: o usuário entra, navega, e toda tela aparece
+        # sem uma linha sequer. Como o formulário nasce em "CD" com "— Sem
+        # localidade definida —", criar um usuário sem tocar em nada produz
+        # exatamente esse usuário cego. `localidade_para_escrita` devolve
+        # ok=True para vazio ("ausência legítima"), então a checagem acima não
+        # pegava o caso.
+        if nivel_acesso == 'CD' and not loc_id:
+            flash('Escolha o CD deste usuário. Sem isso ele entra no sistema '
+                  'e não enxerga nenhum equipamento.', 'danger')
             return redirect(url_for('dashboard.gerenciar_usuarios'))
 
         def _salvar_foto_cracha(user_obj):
@@ -1048,22 +1000,9 @@ def gerenciar_usuarios():
             user.camara       = camara
             user.turno        = turno
             user.nivel_acesso = nivel_acesso
-            if nivel_acesso == 'CD':
-                user.localidade_id = loc_id
-                user.pais_id = None
-                user.america_id = None
-            elif nivel_acesso == 'PAIS':
-                user.localidade_id = None
-                user.pais_id = scope_pais_id
-                user.america_id = None
-            elif nivel_acesso == 'AMERICA':
-                user.localidade_id = None
-                user.pais_id = None
-                user.america_id = scope_america_id
-            else:  # GLOBAL
-                user.localidade_id = None
-                user.pais_id = None
-                user.america_id = None
+            # GLOBAL não guarda CD: o alcance é a empresa inteira, e um
+            # localidade_id residual confundiria quem lê a ficha depois.
+            user.localidade_id = loc_id if nivel_acesso == 'CD' else None
             if senha:
                 user.senha_hash = generate_password_hash(senha, method='scrypt')
                 # Redefinida pela TI → provisória. A própria senha, não.
@@ -1090,8 +1029,6 @@ def gerenciar_usuarios():
                     senha_provisoria=True,
                     grupo_id=grupo.id,
                     localidade_id=loc_id if nivel_acesso == 'CD' else None,
-                    pais_id=scope_pais_id if nivel_acesso == 'PAIS' else None,
-                    america_id=scope_america_id if nivel_acesso == 'AMERICA' else None,
                     nivel_acesso=nivel_acesso,
                     camara=camara,
                     turno=turno,
@@ -1112,8 +1049,6 @@ def gerenciar_usuarios():
     # deixariam atribuir um usuário a um grupo/localidade de outro tenant.
     usuarios_q  = Usuario.query.options(
         selectinload(Usuario.localidade),
-        selectinload(Usuario.pais),
-        selectinload(Usuario.america),
     )
     grupos_q    = Grupo.query
     ids_permitidos = get_filtro_localidade()
@@ -1127,13 +1062,12 @@ def gerenciar_usuarios():
         localidades = []
     usuarios    = usuarios_q.order_by(Usuario.nome).all()
     grupos      = grupos_q.order_by(Grupo.nome).all()
-    americas    = America.query.order_by(America.sigla).all()
-    paises      = Pais.query.join(America, Pais.america_id == America.id).order_by(America.sigla, Pais.nome).all()
     from app.startup import GRUPOS_DEFAULTS
     ordem = list(GRUPOS_DEFAULTS)
     grupos = sorted(grupos, key=lambda g: ordem.index(g.nome) if g.nome in ordem else len(ordem))
-    return render_template('usuarios.html', usuarios=usuarios, grupos=grupos, localidades=localidades,
-                           americas=americas, paises=paises, senha_minima=SENHA_MINIMA)
+    return render_template('usuarios.html', usuarios=usuarios, grupos=grupos,
+                           localidades=localidades, niveis_acesso=NIVEIS_ACESSO,
+                           senha_minima=SENHA_MINIMA)
 
 
 @dashboard_bp.route('/glossario')

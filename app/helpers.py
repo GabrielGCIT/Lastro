@@ -239,14 +239,18 @@ def criterio_empresa(coluna):
 
 
 def _escopo_geografico():
-    """Conjunto de ids de Localidade permitido pelo nível/contexto GEOGRÁFICO.
+    """Ids de Localidade permitidos pelo nível e pelo contexto ativo da sessão.
 
     Independe da empresa — o recorte por tenant é aplicado por
     get_filtro_localidade, que intersecta este conjunto com as localidades da
     empresa da sessão. Retorna:
-        None    — sem restrição geográfica (GLOBAL sem contexto): "toda a empresa"
-        set()   — sem escopo (ex.: CD sem localidade) → resultado final vazio
-        {ids}   — localidades do contexto/nível ativo
+        None    — sem restrição: todos os CDs da empresa
+        set()   — sem escopo (ex.: nível CD sem localidade) → resultado vazio
+        {ids}   — o CD do contexto escolhido na barra, ou o CD do usuário
+
+    Fail-closed por construção: nível ou contexto que não reconhecemos cai no CD
+    do próprio usuário, nunca em "vê tudo". Isso importa mais depois da L2, com
+    só dois níveis — um valor de banco fora de NIVEIS_ACESSO fecha, não abre.
     """
     nivel = session.get('nivel_acesso', 'CD')
     ctx   = session.get('view_context')
@@ -264,43 +268,7 @@ def _escopo_geografico():
         except (ValueError, IndexError):
             return set()
 
-    if ctx and ctx.startswith('PAIS:'):
-        # Query direta: 1 JOIN ao invés de carregar o objeto Pais + iterar localidades
-        sigla = ctx.split(':')[1]
-        from app.models import Localidade, Pais
-        rows = db.session.query(Localidade.id).join(Pais, Localidade.pais_id == Pais.id).filter(Pais.sigla == sigla).all()
-        return {r[0] for r in rows}
-
-    if ctx and ctx.startswith('AMERICA:'):
-        # 1 query com 2 JOINs ao invés de carregar America → paises[] → localidades[]
-        sigla = ctx.split(':')[1]
-        from app.models import Localidade, Pais, America
-        rows = (db.session.query(Localidade.id)
-                .join(Pais,    Localidade.pais_id   == Pais.id)
-                .join(America, Pais.america_id       == America.id)
-                .filter(America.sigla == sigla)
-                .all())
-        return {r[0] for r in rows}
-
-    # ctx ausente ou incompatível com o nível — usa escopo base do usuário
-    if nivel == 'PAIS':
-        pais_id = session.get('pais_id')
-        if pais_id:
-            from app.models import Localidade
-            rows = db.session.query(Localidade.id).filter(Localidade.pais_id == pais_id).all()
-            return {r[0] for r in rows}
-        return set()
-    if nivel == 'AMERICA':
-        america_id = session.get('america_id')
-        if america_id:
-            from app.models import Localidade, Pais
-            rows = (db.session.query(Localidade.id)
-                    .join(Pais, Localidade.pais_id == Pais.id)
-                    .filter(Pais.america_id == america_id)
-                    .all())
-            return {r[0] for r in rows}
-        return set()
-    # CD sem localidade configurada
+    # Nível fora da lista, ou contexto que não sabemos ler: escopo do próprio CD.
     loc_id = session.get('localidade_id')
     return {loc_id} if loc_id else set()
 

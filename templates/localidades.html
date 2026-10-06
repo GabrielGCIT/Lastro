@@ -14,31 +14,6 @@
         </button>
     </div>
 
-    {# ── Filtro por País ── #}
-    {% if paises %}
-    <div class="card card-custom p-3 mb-3">
-        <div class="row g-2 align-items-end">
-            <div class="col-md-3">
-                <label class="form-label small fw-bold text-muted text-uppercase">{{ t('localidades.filtro_pais') }}</label>
-                <select class="form-select form-select-sm" onchange="window.location.href='?pais='+this.value">
-                    <option value="">{{ t('localidades.todos_paises') }}</option>
-                    {% for p in paises %}
-                    <option value="{{ p.sigla }}" {{ 'selected' if filtro_pais == p.sigla else '' }}>
-                        {{ p.sigla }} — {{ p.nome }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            {% if filtro_pais %}
-            <div class="col-auto">
-                <a href="{{ url_for('coletores.gerenciar_localidades') }}" class="btn btn-sm btn-outline-secondary">
-                    <i class="fa-solid fa-xmark me-1"></i>{{ t('btn.limpar') }}
-                </a>
-            </div>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
 
     <div class="card card-custom border-0 shadow-sm">
         <div class="table-responsive">
@@ -47,7 +22,6 @@
                     <tr>
                         <th style="width: 110px;">{{ t('localidades.col_sigla') }}</th>
                         <th>{{ t('label.nome') }}</th>
-                        <th style="width: 80px;">{{ t('label.pais') }}</th>
                         <th>{{ t('label.descricao') }}</th>
                         <th class="text-center" style="width: 100px;">{{ t('localidades.col_coletores') }}</th>
                         <th class="text-center" style="width: 100px;">{{ t('localidades.col_usuarios') }}</th>
@@ -61,13 +35,6 @@
                             <span class="badge bg-dark fs-6 px-3 py-2 font-monospace">{{ loc.sigla_completa }}</span>
                         </td>
                         <td class="fw-bold">{{ loc.nome }}</td>
-                        <td class="text-muted small font-monospace">
-                            {% if loc.pais %}
-                                {{ loc.pais.sigla }}
-                            {% else %}
-                                <span class="text-muted">—</span>
-                            {% endif %}
-                        </td>
                         <td class="text-muted small">{{ loc.descricao or '—' }}</td>
                         <td class="text-center">
                             {% if loc.coletores|length > 0 %}
@@ -93,7 +60,6 @@
                                     data-sigla="{{ loc.sigla }}"
                                     data-nome="{{ loc.nome }}"
                                     data-desc="{{ loc.descricao or '' }}"
-                                    data-pais-id="{{ loc.pais_id or '' }}"
                                     onclick="editarLoc(this)"
                                     title="{{ t('btn.editar') }}">
                                 <i class="fa-solid fa-pen-to-square"></i>
@@ -155,15 +121,6 @@
                         <input type="text" class="form-control" name="nome" required placeholder="{{ t('localidades.placeholder_nome') }}">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold">{{ t('label.pais') }}</label>
-                        <select name="pais_id" class="form-select">
-                            <option value="">{{ t('localidades.sem_pais') }}</option>
-                            {% for p in paises %}
-                            <option value="{{ p.id }}">{{ p.sigla }} — {{ p.nome }} ({{ p.america.sigla }})</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="mb-3">
                         <label class="form-label fw-bold">{{ t('label.descricao') }}</label>
                         <input type="text" class="form-control" name="descricao" placeholder="{{ t('localidades.placeholder_desc') }}">
                     </div>
@@ -202,15 +159,6 @@
                         <input type="text" class="form-control" name="nome" id="edit_nome" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold">{{ t('label.pais') }}</label>
-                        <select name="pais_id" id="edit_pais_id" class="form-select">
-                            <option value="">{{ t('localidades.sem_pais') }}</option>
-                            {% for p in paises %}
-                            <option value="{{ p.id }}">{{ p.sigla }} — {{ p.nome }} ({{ p.america.sigla }})</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="mb-3">
                         <label class="form-label fw-bold">{{ t('label.descricao') }}</label>
                         <input type="text" class="form-control" name="descricao" id="edit_desc">
                     </div>
@@ -232,7 +180,6 @@
         document.getElementById('edit_sigla').value  = btn.dataset.sigla;
         document.getElementById('edit_nome').value   = btn.dataset.nome;
         document.getElementById('edit_desc').value   = btn.dataset.desc;
-        document.getElementById('edit_pais_id').value = btn.dataset.paisId || '';
         new bootstrap.Modal(document.getElementById('modalEditarLoc')).show();
     }
 </script>

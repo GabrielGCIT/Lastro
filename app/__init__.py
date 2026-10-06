@@ -204,8 +204,6 @@ def create_app(database_url=None):
         # UX Tokens — mantém tema/acento sincronizados como grupo/idioma
         _s['tema']          = u.tema or 'light'
         _s['cor_acento']    = u.cor_acento
-        _s['america_id']    = u.america_id
-        _s['pais_id']       = u.pais_id
         _s['localidade_id'] = u.localidade_id
         # Se o nível mudou (admin alterou o usuário), descarta view_context antigo
         # para que o bloco abaixo o reinicialize com o escopo correto.
@@ -214,14 +212,6 @@ def create_app(database_url=None):
         if 'view_context' not in _s:
             if u.nivel_acesso == 'CD':
                 _s['view_context'] = f'CD:{u.localidade_id}' if u.localidade_id else None
-            elif u.nivel_acesso == 'PAIS' and u.pais_id:
-                from app.models import Pais as _Pais
-                _pais = db.session.get(_Pais, u.pais_id)
-                _s['view_context'] = f'PAIS:{_pais.sigla}' if _pais else None
-            elif u.nivel_acesso == 'AMERICA' and u.america_id:
-                from app.models import America as _America
-                _am = db.session.get(_America, u.america_id)
-                _s['view_context'] = f'AMERICA:{_am.sigla}' if _am else None
             else:
                 _s['view_context'] = 'GLOBAL'
 
@@ -251,7 +241,7 @@ def create_app(database_url=None):
         usuário logado, evitando duplicação nas views.
         """
         from flask import session
-        from app.models import Usuario, America, Pais
+        from app.models import Usuario, Localidade
 
         # Foto de perfil do usuário logado — alimenta o avatar na navbar
         foto_perfil_url = None
@@ -261,24 +251,16 @@ def create_app(database_url=None):
             if u and u.foto_perfil:
                 foto_perfil_url = f'/uploads/perfis/{u.foto_perfil}'
 
-        # P7 — Americas e Países para a barra de contexto do context switcher.
-        # Carregado apenas para usuários acima de CD — para CD, o dropdown não
-        # é exibido e as queries seriam desperdiçadas em todo request.
-        # selectinload pré-carrega .paises e .localidades evitando N+1 no template:
-        # sem eager load, cada acesso a am.paises ou pais.localidades dispara
-        # uma query lazy extra por linha iterada no Jinja.
-        nivel = session.get('nivel_acesso', 'CD')
-        if nivel != 'CD' and user_id:
-            from sqlalchemy.orm import selectinload
-            americas = (America.query
-                        .options(selectinload(America.paises).selectinload(Pais.localidades))
-                        .order_by(America.sigla).all())
-            paises   = (Pais.query
-                        .options(selectinload(Pais.localidades))
-                        .order_by(Pais.nome).all())
-        else:
-            americas = []
-            paises   = []
+        # CDs da barra de contexto. Só para quem alcança mais de um (GLOBAL) —
+        # para quem é de um CD a barra não aparece, e a query seria desperdício
+        # em todo request. O escopo é a empresa da sessão, nunca o banco inteiro.
+        cds_contexto = []
+        if user_id and session.get('nivel_acesso') == 'GLOBAL':
+            empresa_id = session.get('empresa_id')
+            if empresa_id:
+                cds_contexto = (Localidade.query
+                                .filter(Localidade.empresa_id == empresa_id)
+                                .order_by(Localidade.sigla).all())
 
         from app.helpers import t as _t
 
@@ -331,8 +313,7 @@ def create_app(database_url=None):
             mapa_diagnostico=DIAGNOSTICO_MAPA,
             mapa_diagnostico_i18n=mapa_diagnostico_i18n,
             foto_perfil_url=foto_perfil_url,
-            americas=americas,
-            paises=paises,
+            cds_contexto=cds_contexto,
             cor_acento_seguro=cor_acento_seguro,
             tema_pref=tema_pref,
         )

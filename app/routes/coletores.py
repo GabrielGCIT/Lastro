@@ -16,7 +16,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 
 from app import db
 from app.models import (Coletor, Localidade, Movimentacao, Usuario,
-                        America, Pais, STATUS_INDISPONIVEIS, STATUS_FORA_DE_OPERACAO,
+                        STATUS_INDISPONIVEIS, STATUS_FORA_DE_OPERACAO,
                         STATUS_COLETOR)
 from app.helpers import (login_required, permissao_required, registrar_log,
                          get_filtro_localidade, empresa_para_escrita,
@@ -268,8 +268,6 @@ def gerenciar_localidades():
             sigla = request.form.get('sigla', '').upper().strip()
             nome  = request.form.get('nome', '').strip()
             desc  = request.form.get('descricao', '').strip() or None
-            pais_id_raw = request.form.get('pais_id') or None
-            pais_id = int(pais_id_raw) if pais_id_raw else None
             # S1/família A — a localidade é a âncora do tenant: nasce carimbada
             # com a empresa da sessão. Sem tenant, a criação é bloqueada.
             empresa_id = empresa_para_escrita()
@@ -280,14 +278,11 @@ def gerenciar_localidades():
             elif Localidade.query.filter(
                 Localidade.empresa_id == empresa_id,      # S1/família D — unicidade por empresa
                 Localidade.sigla == sigla,
-                Localidade.pais_id == pais_id,  # == None gera IS NULL corretamente
             ).first():
-                # P8a — check por país: permite BR-GR e CR-GR coexistirem.
-                # T1 — e por empresa: dois tenants podem ter BR-GR sem conflito.
-                flash(f'Já existe um CD com a sigla "{sigla}" neste país.', 'danger')
+                flash(f'Já existe um CD com a sigla "{sigla}".', 'danger')
             else:
                 db.session.add(Localidade(sigla=sigla, nome=nome, descricao=desc,
-                                          pais_id=pais_id, empresa_id=empresa_id))
+                                          empresa_id=empresa_id))
                 registrar_log('CREATE_LOCALIDADE', f'Localidade {sigla} criada.')
                 db.session.commit()
                 flash(f'Localidade {sigla} — {nome} criada com sucesso.', 'success')
@@ -298,30 +293,25 @@ def gerenciar_localidades():
             if loc and empresa_visivel(loc.empresa_id):
                 nova_sigla   = request.form.get('sigla', '').upper().strip()
                 novo_nome    = request.form.get('nome', '').strip()
-                pais_id_raw  = request.form.get('pais_id') or None
-                novo_pais_id = int(pais_id_raw) if pais_id_raw else None
 
                 if not nova_sigla or not novo_nome:
                     flash('Sigla e nome são obrigatórios.', 'danger')
                     return redirect(url_for('coletores.gerenciar_localidades'))
 
                 # S1/família D — o conflito de sigla é dentro da MESMA empresa da
-                # localidade (constraint uq_localidade_empresa_sigla_pais); um CD
-                # homônimo em outro tenant não bloqueia a edição.
+                # localidade (constraint uq_localidade_empresa_sigla).
                 conflito = Localidade.query.filter(
                     Localidade.empresa_id == loc.empresa_id,
                     Localidade.sigla == nova_sigla,
-                    Localidade.pais_id == novo_pais_id,
                     Localidade.id != loc.id,
                 ).first()
                 if conflito:
-                    flash(f'Já existe um CD com a sigla "{nova_sigla}" neste país.', 'danger')
+                    flash(f'Já existe um CD com a sigla "{nova_sigla}".', 'danger')
                     return redirect(url_for('coletores.gerenciar_localidades'))
 
                 loc.sigla     = nova_sigla
                 loc.nome      = novo_nome
                 loc.descricao = request.form.get('descricao', '').strip() or None
-                loc.pais_id   = novo_pais_id
                 registrar_log('UPDATE_LOCALIDADE', f'Localidade {loc.sigla} atualizada.')
                 db.session.commit()
                 flash(f'Localidade {loc.sigla} atualizada.', 'success')
@@ -343,10 +333,7 @@ def gerenciar_localidades():
 
         return redirect(url_for('coletores.gerenciar_localidades'))
 
-    filtro_pais = request.args.get('pais', '')
     loc_q = Localidade.query
-    if filtro_pais:
-        loc_q = loc_q.join(Pais, Localidade.pais_id == Pais.id).filter(Pais.sigla == filtro_pais)
 
     # S3/família C — leitura escopada por empresa (fail-closed); Owner vê todas.
     ids_permitidos = get_filtro_localidade()
@@ -364,14 +351,13 @@ def gerenciar_localidades():
     if ids_permitidos is not None:
         contagem_q = contagem_q.filter(Usuario.localidade_id.in_(ids_permitidos)) if ids_permitidos else contagem_q.filter(False)
     usuarios_por_loc = dict(contagem_q.group_by(Usuario.localidade_id).all())
-    paises = Pais.query.join(America, Pais.america_id == America.id).order_by(America.sigla, Pais.nome).all()
 
-    return render_template('localidades.html', localidades=localidades, usuarios_por_loc=usuarios_por_loc,
-                           paises=paises, filtro_pais=filtro_pais)
+    return render_template('localidades.html', localidades=localidades,
+                           usuarios_por_loc=usuarios_por_loc)
 
 
 # ---------------------------------------------------------------------------
-# PAÍSES
+# AÇÕES EM LOTE
 # ---------------------------------------------------------------------------
 
 @coletores_bp.route('/coletores/mover', methods=['POST'])

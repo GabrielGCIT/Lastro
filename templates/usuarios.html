@@ -150,22 +150,6 @@
                                 {% else %}
                                     <span class="text-muted">—</span>
                                 {% endif %}
-                            {% elif u.nivel_acesso == 'PAIS' %}
-                                {% if u.pais %}
-                                    <span class="badge bg-primary" title="{{ t('label.pais') }}">
-                                        <i class="fa-solid fa-flag me-1" style="font-size:0.65em;"></i>{{ u.pais.sigla }}
-                                    </span>
-                                {% else %}
-                                    <span class="text-muted">—</span>
-                                {% endif %}
-                            {% elif u.nivel_acesso == 'AMERICA' %}
-                                {% if u.america %}
-                                    <span class="badge bg-info text-dark" title="{{ t('label.america') }}">
-                                        <i class="fa-solid fa-earth-americas me-1" style="font-size:0.65em;"></i>{{ u.america.sigla }}
-                                    </span>
-                                {% else %}
-                                    <span class="text-muted">—</span>
-                                {% endif %}
                             {% elif u.nivel_acesso == 'GLOBAL' %}
                                 <span class="badge bg-dark" title="{{ t('nivel.global') }}">
                                     <i class="fa-solid fa-globe me-1" style="font-size:0.65em;"></i>Global
@@ -190,7 +174,7 @@
                         </td>
                         <td class="d-flex gap-2 align-items-center flex-wrap">
                             <button class="btn btn-sm btn-outline-primary"
-                                    onclick="editarUsuario('{{ u.id }}', '{{ u.nome | replace("'", "\\'") }}', '{{ u.re }}', '{{ u.grupo_id or '' }}', '{{ u.localidade_id or '' }}', '{{ u.camara or '' }}', '{{ u.turno or '' }}', '{{ u.nivel_acesso or 'CD' }}', '{{ u.pais_id or '' }}', '{{ u.america_id or '' }}', '{{ (u.email or '') | replace("'", "\\'") }}')">
+                                    onclick="editarUsuario('{{ u.id }}', '{{ u.nome | replace("'", "\\'") }}', '{{ u.re }}', '{{ u.grupo_id or '' }}', '{{ u.localidade_id or '' }}', '{{ u.camara or '' }}', '{{ u.turno or '' }}', '{{ u.nivel_acesso or 'CD' }}', '{{ (u.email or '') | replace("'", "\\'") }}')">
                                 <i class="fa-solid fa-pen"></i> {{ t('btn.editar') }}
                             </button>
                         </td>
@@ -259,8 +243,6 @@
                         <select class="form-select" name="nivel_acesso" id="nivel_acesso_select"
                                 onchange="atualizarSeletoresNivel(this.value)">
                             <option value="CD">{{ t('usuarios.nivel.cd') }}</option>
-                            <option value="PAIS">{{ t('usuarios.nivel.pais') }}</option>
-                            <option value="AMERICA">{{ t('usuarios.nivel.america') }}</option>
                             <option value="GLOBAL">{{ t('usuarios.nivel.global') }}</option>
                         </select>
                         <div class="form-text">{{ t('usuarios.hint_nivel') }}</div>
@@ -272,26 +254,6 @@
                             <option value="">{{ t('msg.selecione') }}</option>
                             {% for loc in localidades %}
                             <option value="{{ loc.id }}">{{ loc.sigla_completa }} — {{ loc.nome }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div id="seletor_pais" class="mb-3" style="display:none">
-                        <label class="form-label fw-bold small">{{ t('label.pais') }}</label>
-                        <select class="form-select" name="pais_id_scope" id="pais_id_select">
-                            <option value="">— Selecione o país —</option>
-                            {% for p in paises %}
-                            <option value="{{ p.id }}">{{ p.sigla }} — {{ p.nome }} ({{ p.america.sigla }})</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div id="seletor_america" class="mb-3" style="display:none">
-                        <label class="form-label fw-bold small">{{ t('label.america') }}</label>
-                        <select class="form-select" name="america_id" id="america_id_select">
-                            <option value="">— Selecione a América —</option>
-                            {% for am in americas %}
-                            <option value="{{ am.id }}">{{ am.sigla }} — {{ am.nome }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -392,15 +354,11 @@
     }
 
     function atualizarSeletoresNivel(nivel) {
-        document.getElementById('seletor_localidade').style.display = nivel === 'CD'      ? 'block' : 'none';
-        document.getElementById('seletor_pais').style.display       = nivel === 'PAIS'    ? 'block' : 'none';
-        document.getElementById('seletor_america').style.display    = nivel === 'AMERICA' ? 'block' : 'none';
+        document.getElementById('seletor_localidade').style.display = nivel === 'CD' ? 'block' : 'none';
         // O required acompanha o nível. Fixo no HTML ele ficaria ligado num
-        // campo ESCONDIDO nos outros níveis, e o navegador recusa o envio sem
+        // campo ESCONDIDO no nível GLOBAL, e o navegador recusa o envio sem
         // conseguir mostrar onde — botão que não faz nada, sem mensagem.
-        document.getElementById('localidade_id').required  = nivel === 'CD';
-        document.getElementById('pais_id_select').required = nivel === 'PAIS';
-        document.getElementById('america_id_select').required = nivel === 'AMERICA';
+        document.getElementById('localidade_id').required = nivel === 'CD';
     }
 
     function abrirModalUsuario() {
@@ -410,8 +368,6 @@
         document.getElementById('email_usuario').value = '';
         document.getElementById('grupo_id').selectedIndex = 0;
         document.getElementById('localidade_id').value = '';
-        document.getElementById('pais_id_select').value = '';
-        document.getElementById('america_id_select').value = '';
         document.getElementById('nivel_acesso_select').value = 'CD';
         document.getElementById('camara_usuario').value = '';
         document.getElementById('turno_usuario').value = '';
@@ -426,7 +382,7 @@
         new bootstrap.Modal(document.getElementById('modalUsuario')).show();
     }
 
-    function editarUsuario(id, nome, re, grupoId, localidadeId, camara, turno, nivelAcesso, paisId, americaId, email) {
+    function editarUsuario(id, nome, re, grupoId, localidadeId, camara, turno, nivelAcesso, email) {
         document.getElementById('user_id').value = id;
         document.getElementById('nome').value = nome;
         document.getElementById('re').value = re;
@@ -436,8 +392,6 @@
         document.getElementById('camara_usuario').value = camara || '';
         document.getElementById('turno_usuario').value = turno || '';
         document.getElementById('nivel_acesso_select').value = nivelAcesso || 'CD';
-        document.getElementById('pais_id_select').value = paisId || '';
-        document.getElementById('america_id_select').value = americaId || '';
         document.getElementById('senha').value = '';
         document.getElementById('senha').required = false;
         document.getElementById('senha_asterisco').style.display = 'none';

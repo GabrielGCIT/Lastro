@@ -11,7 +11,7 @@ from werkzeug.security import generate_password_hash
 
 from app import db
 from app.models import (
-    Empresa, Usuario, Colaborador, Grupo, Localidade, Pais,
+    Empresa, Usuario, Colaborador, Grupo, Localidade,
 )
 from app.startup import seed_empresa, _TABELAS_EMPRESA
 
@@ -110,18 +110,21 @@ def test_nome_grupo_igual_em_empresas_diferentes_permitido(app):
     assert Grupo.query.filter_by(nome='TI').count() == 2
 
 
-def test_sigla_localidade_composta_por_empresa(app):
+def test_sigla_do_cd_unica_dentro_da_empresa(app):
+    """A sigla do CD é única por empresa — e só por empresa.
+
+    Antes da L2 a constraint era (empresa, sigla, pais): a mesma sigla podia
+    repetir na MESMA empresa se os países fossem diferentes. Sem país, não há o
+    que desempatar, e a regra fica mais apertada do que era.
+    """
     mb    = _empresa_mb()
     outra = _nova_empresa()
-    br    = Pais.query.filter_by(sigla='BR').first()
-    db.session.add(Localidade(sigla='GR', nome='Guarulhos MB',
-                              pais_id=br.id, empresa_id=mb.id))
-    db.session.add(Localidade(sigla='GR', nome='Guarulhos Acme',
-                              pais_id=br.id, empresa_id=outra.id))
-    db.session.commit()
+    db.session.add(Localidade(sigla='GR', nome='Guarulhos MB',    empresa_id=mb.id))
+    db.session.add(Localidade(sigla='GR', nome='Guarulhos Acme',  empresa_id=outra.id))
+    db.session.commit()   # mesma sigla em empresas diferentes: convive
 
     db.session.add(Localidade(sigla='GR', nome='Guarulhos duplicado',
-                              pais_id=br.id, empresa_id=mb.id))
+                              empresa_id=mb.id))
     with pytest.raises(IntegrityError):
         db.session.commit()
     db.session.rollback()

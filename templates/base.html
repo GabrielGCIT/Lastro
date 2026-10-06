@@ -782,82 +782,31 @@
         </div>
     </nav>
 
-    {# P7 — Barra de contexto: exibida apenas para usuários acima de CD. #}
-    {% if session.get('nivel_acesso') and session.get('nivel_acesso') != 'CD' %}
+    {# Barra de contexto: só para quem alcança mais de um CD. Com dois níveis,
+       isso é o mesmo que dizer "só para GLOBAL" — quem é de um CD não tem o que
+       escolher, e a barra some em vez de mostrar um seletor de uma opção só. #}
+    {% if session.get('nivel_acesso') == 'GLOBAL' %}
     <div style="background: var(--mb-dark-2); border-bottom: 1px solid rgba(255,255,255,0.06); padding: 5px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
       <span style="color: rgba(255,255,255,0.4); font-size: 0.75rem; white-space: nowrap;">
         <i class="fa-solid fa-eye me-1"></i>{{ t('ctx.vendo') }}:
       </span>
       <form method="POST" action="{{ url_for('dashboard.trocar_contexto') }}" class="m-0">
-        {% set ctx   = session.get('view_context', '') %}
-        {% set nivel = session.get('nivel_acesso', 'CD') %}
+        {% set ctx = session.get('view_context', '') %}
         <select name="contexto" class="form-select form-select-sm"
                 style="width: auto; min-width: 200px; background: var(--mb-dark-4); border-color: rgba(255,255,255,0.12); color: #e3e5e8; font-size: 0.8rem;"
                 onchange="this.form.submit()">
-
-          {% if nivel == 'GLOBAL' %}
-            <option value="GLOBAL" {% if ctx == 'GLOBAL' %}selected{% endif %}>{{ t('ctx.todos_global') }}</option>
-            {% for am in americas %}
-              {% for pais in am.paises %}
-                {% if pais.localidades %}
-                  <optgroup label="{{ am.nome }} — {{ pais.nome }}">
-                    <option value="PAIS:{{ pais.sigla }}" {% if ctx == 'PAIS:' ~ pais.sigla %}selected{% endif %}>
-                      {{ t('ctx.todo_pais') }} {{ pais.nome }}
-                    </option>
-                    {% for loc in pais.localidades %}
-                    <option value="CD:{{ loc.id }}" {% if ctx == 'CD:' ~ loc.id %}selected{% endif %}>
-                      &nbsp;&nbsp;{{ loc.sigla_completa }} — {{ loc.nome }}
-                    </option>
-                    {% endfor %}
-                  </optgroup>
-                {% endif %}
-              {% endfor %}
-            {% endfor %}
-
-          {% elif nivel == 'AMERICA' %}
-            {% for am in americas %}
-              {% if am.id == session.get('america_id') %}
-                <option value="AMERICA:{{ am.sigla }}" {% if ctx == 'AMERICA:' ~ am.sigla %}selected{% endif %}>
-                  {{ t('ctx.toda_america') }} {{ am.nome }}
-                </option>
-                {% for pais in am.paises %}
-                  {% if pais.localidades %}
-                    <optgroup label="{{ pais.nome }}">
-                      <option value="PAIS:{{ pais.sigla }}" {% if ctx == 'PAIS:' ~ pais.sigla %}selected{% endif %}>
-                        {{ t('ctx.todo_pais') }} {{ pais.nome }}
-                      </option>
-                      {% for loc in pais.localidades %}
-                      <option value="CD:{{ loc.id }}" {% if ctx == 'CD:' ~ loc.id %}selected{% endif %}>
-                        {{ loc.sigla_completa }}
-                      </option>
-                      {% endfor %}
-                    </optgroup>
-                  {% endif %}
-                {% endfor %}
-              {% endif %}
-            {% endfor %}
-
-          {% elif nivel == 'PAIS' %}
-            {% for pais in paises %}
-              {% if pais.id == session.get('pais_id') %}
-                <option value="PAIS:{{ pais.sigla }}" {% if ctx == 'PAIS:' ~ pais.sigla %}selected{% endif %}>
-                  {{ t('ctx.todo_pais') }} {{ pais.nome }}
-                </option>
-                {% for loc in pais.localidades %}
-                <option value="CD:{{ loc.id }}" {% if ctx == 'CD:' ~ loc.id %}selected{% endif %}>
-                  {{ loc.sigla_completa }} — {{ loc.nome }}
-                </option>
-                {% endfor %}
-              {% endif %}
-            {% endfor %}
-          {% endif %}
-
+          <option value="GLOBAL" {% if ctx == 'GLOBAL' %}selected{% endif %}>{{ t('ctx.todos_global') }}</option>
+          {% for loc in cds_contexto %}
+          <option value="CD:{{ loc.id }}" {% if ctx == 'CD:' ~ loc.id %}selected{% endif %}>
+            {{ loc.sigla_completa }} — {{ loc.nome }}
+          </option>
+          {% endfor %}
         </select>
       </form>
-      {# U4 — este selo imprimia o enum cru: GLOBAL, AMERICA, PAIS. Ele diz uma
-         coisa util e diferente do seletor ao lado -- ATE ONDE a pessoa pode ver,
-         que nem sempre e o que ela esta vendo agora. A informacao fica; o
-         vocabulario de banco de dados sai. #}
+      {# U4 — o selo diz ATE ONDE a pessoa pode ver, que nao e o mesmo que o
+         seletor ao lado (o que ela ve AGORA). Continua valendo com dois niveis:
+         um GLOBAL que escolheu um CD le "vendo GR" no seletor e "alcance: todos
+         os CDs" aqui. #}
       <span class="badge" title="{{ t('ctx.alcance_dica') }}"
             style="background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent-light); font-size: 0.65rem; font-weight: 600; border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);">
         {{ t('ctx.alcance') }}: {{ t('ctx.nivel.' ~ session.get('nivel_acesso', 'CD')) }}

@@ -9,3 +9,6 @@ uploads/
 *.db-wal
 *.db-shm
 .env
+
+# Ferramentas de desenvolvimento — nao fazem parte do produto entregue
+.claude/

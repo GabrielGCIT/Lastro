@@ -8,8 +8,7 @@ com constraints nomeadas lá) e este arquivo cuida só dos seeds.
 Ordem de execução dentro do app_context (ver executar_startup):
   1. db.create_all()
   2. seed_grupos_e_permissoes()
-  3. seed_geografico()
-  4. seed_empresa()         ← empresa da instalação + vínculo do que nasceu órfão
+  3. seed_empresa()         ← empresa da instalação + vínculo do que nasceu órfão
 
 O boot NÃO cria usuário: o administrador nasce no primeiro acesso
 (auth.primeiro_acesso), com a senha escolhida por quem instala.
@@ -99,56 +98,6 @@ PERFIL_ADMIN = 'TI'
 # ---------------------------------------------------------------------------
 # SEEDS
 # ---------------------------------------------------------------------------
-
-def seed_geografico():
-    """Popula Américas, Países e vincula Localidades existentes ao País correto.
-
-    Completamente idempotente — seguro rodar em todo boot. Qualquer execução
-    subsequente descobre que os registros já existem e não duplica.
-
-    Migração automática: todas as Localidades sem pais_id são assumidas como BR
-    (único país com CDs no deploy inicial). Ao adicionar CDs de outros países
-    no futuro, o pais_id deverá ser definido manualmente via tela de admin.
-    """
-    from app.models import America, Pais, Localidade
-
-    AMERICAS = [
-        ('SA', 'South America'),
-        ('CA', 'Central America'),
-        ('NA', 'North America'),
-    ]
-    # Porto Rico (PR) é CA por decisão organizacional interna — não é erro.
-    PAISES = [
-        ('BR', 'Brasil',         'SA'),
-        ('PA', 'Panamá',         'CA'),
-        ('CR', 'Costa Rica',     'CA'),
-        ('PR', 'Porto Rico',     'CA'),
-        ('US', 'Estados Unidos', 'NA'),
-    ]
-
-    for sigla, nome in AMERICAS:
-        if not America.query.filter_by(sigla=sigla).first():
-            db.session.add(America(sigla=sigla, nome=nome))
-            print(f"[SEED] América criada: {sigla}")
-    db.session.flush()
-
-    for sigla, nome, america_sigla in PAISES:
-        if not Pais.query.filter_by(sigla=sigla).first():
-            america = America.query.filter_by(sigla=america_sigla).first()
-            db.session.add(Pais(sigla=sigla, nome=nome, america_id=america.id))
-            print(f"[SEED] País criado: {sigla}")
-    db.session.flush()
-
-    brasil = Pais.query.filter_by(sigla='BR').first()
-    if brasil:
-        migradas = Localidade.query.filter_by(pais_id=None).count()
-        if migradas:
-            Localidade.query.filter_by(pais_id=None).update({'pais_id': brasil.id})
-            print(f"[SEED] {migradas} localidade(s) vinculada(s) ao Brasil.")
-
-    db.session.commit()
-    print("[SEED] Hierarquia geográfica sincronizada.")
-
 
 def seed_grupos_empresa(empresa_id, perm_map):
     """Cria/converge os quatro perfis para UMA empresa.
@@ -247,5 +196,4 @@ def executar_startup():
     """
     db.create_all()
     seed_grupos_e_permissoes()
-    seed_geografico()
     seed_empresa()

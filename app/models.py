@@ -45,6 +45,14 @@ DIAGNOSTICO_MAPA = {
 # qualquer outro valor: tirar a opção da tela não impede um POST forjado.
 STATUS_COLETOR = ['Disponível', 'Em Uso', 'Manutenção', 'Suspenso']
 
+# Teto de visibilidade de um usuário. Dois valores, não quatro: o CD é o único
+# agrupamento que existe aqui, então ou se vê um CD, ou se vê todos.
+#   CD     — só a localidade em Usuario.localidade_id
+#   GLOBAL — todos os CDs
+# A tela de usuários recusa qualquer valor fora desta lista: com dois níveis, um
+# valor errado não causa erro, causa um usuário que não enxerga nada.
+NIVEIS_ACESSO = ['CD', 'GLOBAL']
+
 # U2 — "indisponível" não é um status, é um GRUPO. O dashboard conta assim; a
 # constante existe para o inventário filtrar exatamente o mesmo conjunto. Duas
 # listas iguais em arquivos diferentes divergem na primeira vez que alguém
@@ -465,12 +473,8 @@ class Usuario(db.Model):
     # P2 — Câmara e turno operacional do colaborador
     camara           = db.Column(db.String(15), nullable=True)  # SECO | RESFRIADO | CONGELADO
     turno            = db.Column(db.String(5),  nullable=True)  # T1 | T2 | T3
-    # P5 — Multi-tenancy: escopo de acesso geográfico
-    # nivel_acesso determina o teto de visibilidade; os FKs abaixo definem o escopo
-    # dentro desse teto. Para CD, usa localidade_id (já existente). Para GLOBAL, sem FK.
-    nivel_acesso     = db.Column(db.String(10), default='CD', nullable=False, server_default="'CD'")  # CD | PAIS | AMERICA | GLOBAL
-    america_id       = db.Column(db.Integer, db.ForeignKey('americas.id'), nullable=True)
-    pais_id          = db.Column(db.Integer, db.ForeignKey('paises.id'),   nullable=True)
+    # Escopo de acesso: CD lê localidade_id; GLOBAL não usa FK nenhuma.
+    nivel_acesso     = db.Column(db.String(10), default='CD', nullable=False, server_default="'CD'")  # NIVEIS_ACESSO
     idioma           = db.Column(db.String(5), default='pt', nullable=False, server_default="'pt'")   # pt | en | es
     # UX Tokens — preferências visuais do usuário (tema + cor de acento)
     # tema: light | dark | auto (auto segue prefers-color-scheme do SO). Nullable → default light.
@@ -486,9 +490,6 @@ class Usuario(db.Model):
     login_tentativas        = db.Column(db.Integer,  nullable=False, default=0, server_default='0')
     login_ultima_tentativa  = db.Column(db.DateTime, nullable=True)
     login_bloqueado_ate     = db.Column(db.DateTime, nullable=True)
-    # Relationships de escopo geográfico — usados na tela de gestão de usuários
-    pais             = db.relationship('Pais',    foreign_keys=[pais_id],    lazy='select')
-    america          = db.relationship('America', foreign_keys=[america_id], lazy='select')
     empresa          = db.relationship('Empresa', foreign_keys=[empresa_id], lazy='select')
 
 
@@ -511,44 +512,16 @@ class LogAuditoria(db.Model):
 
 
 # ---------------------------------------------------------------------------
-# HIERARQUIA GEOGRÁFICA (P5 — Multi-tenancy)
+# LOCALIDADES — os CDs da operação
 # ---------------------------------------------------------------------------
-
-class America(db.Model):
-    """Agrupamento continental — nível mais alto da hierarquia geográfica.
-
-    SA (South America) | CA (Central America) | NA (North America).
-    Porto Rico (PR) é tratado como CA por decisão organizacional interna da MB,
-    não por localização geográfica — hardcoded no seed e não deve ser questionado.
-    """
-    __tablename__ = 'americas'
-    id    = db.Column(db.Integer, primary_key=True)
-    sigla = db.Column(db.String(5),  unique=True, nullable=False)  # SA | CA | NA
-    nome  = db.Column(db.String(50), nullable=False)
-
-    paises = db.relationship('Pais', backref='america', lazy=True)
-
-
-class Pais(db.Model):
-    """País dentro de uma América — agrupa CDs (Localidades) sob o mesmo país."""
-    __tablename__ = 'paises'
-    id         = db.Column(db.Integer, primary_key=True)
-    sigla      = db.Column(db.String(5),  unique=True, nullable=False)  # BR | PA | CR | PR | US
-    nome       = db.Column(db.String(50), nullable=False)
-    america_id = db.Column(db.Integer, db.ForeignKey('americas.id'), nullable=False)
-
-    localidades = db.relationship('Localidade', backref='pais', lazy=True)
-
 
 class Localidade(db.Model):
     """Representa uma unidade física (CD, filial) que possui coletores sob sua responsabilidade."""
     __tablename__ = 'localidades'
-    # P8a — sigla única por país, não globalmente. Permite o mesmo código de CD em
-    # países diferentes (ex: GR existe em BR-GR e pode existir em CR-GR).
-    # T1 — a unicidade ganha a empresa: dois tenants podem ter BR-GR sem conflito.
+    # A sigla do CD é única na operação — sem país, não há o que desempatar.
     __table_args__ = (
-        db.UniqueConstraint('empresa_id', 'sigla', 'pais_id',
-                            name='uq_localidade_empresa_sigla_pais'),
+        db.UniqueConstraint('empresa_id', 'sigla',
+                            name='uq_localidade_empresa_sigla'),
     )
     id         = db.Column(db.Integer, primary_key=True)
     # T1 — âncora do multi-tenancy: todo o operacional herda o isolamento daqui.
@@ -556,20 +529,16 @@ class Localidade(db.Model):
     sigla      = db.Column(db.String(10), nullable=False)   # GR, EC, JC...
     nome      = db.Column(db.String(100), nullable=False)
     descricao = db.Column(db.String(200))
-    # P5 — vínculo com o País ao qual este CD pertence (nullable para retrocompatibilidade)
-    pais_id   = db.Column(db.Integer, db.ForeignKey('paises.id'), nullable=True)
     coletores = db.relationship('Coletor', backref='localidade', lazy=True)
 
     @property
     def sigla_completa(self):
-        """Retorna a sigla composta no formato PAIS-CD (ex: BR-GR, CR-SJO, US-RSM).
+        """A sigla do CD — ex: GR, EC, JC.
 
-        Usado em todas as telas que hoje exibem só a sigla simples — a property
-        garante ponto único de formatação sem duplicar lógica em template/rota.
-        Retorna só a sigla simples se o País ainda não estiver vinculado (legado).
+        Existia para montar PAIS-CD (BR-GR) quando havia hierarquia de países.
+        Sem ela o prefixo não tem o que dizer, mas a property fica: é o ponto
+        único de formatação que templates e rotas já chamam.
         """
-        if self.pais:
-            return f'{self.pais.sigla}-{self.sigla}'
         return self.sigla
 
 

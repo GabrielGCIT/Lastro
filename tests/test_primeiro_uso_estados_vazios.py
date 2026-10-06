@@ -168,11 +168,30 @@ def test_usuario_cd_sem_localidade_nao_e_criado(admin_client, loc):
     assert 'não enxerga nenhum equipamento' in html
 
 
-def test_usuario_pais_sem_pais_tambem_nao(admin_client, loc):
-    """Não é exclusividade do CD: PAIS e AMERICA caem no mesmo set() vazio."""
-    _cadastrar_usuario(admin_client, nivel_acesso='PAIS', pais_id_scope='')
+def test_nivel_fora_da_lista_e_recusado(admin_client, loc):
+    """🔴 Antes da L2 existiam quatro níveis; agora são dois (NIVEIS_ACESSO).
+
+    Este teste nasceu substituindo um que mandava nivel_acesso='PAIS' e checava
+    que o usuário não era criado. Ele continuaria VERDE depois da poda — mas
+    pelo motivo errado: a recusa passaria a vir da validação de nível, não do
+    escopo vazio que o nome prometia. Então o alvo mudou junto: o que importa
+    provar agora é que um nível herdado não grava.
+
+    Sem esta guarda o estrago é mudo: a coluna é String e aceita qualquer texto,
+    e `_escopo_geografico` é fail-closed — gravaria 'PAIS' sem erro nenhum e
+    produziria um usuário que entra no sistema e não enxerga uma linha.
+    """
+    html = _cadastrar_usuario(admin_client, nivel_acesso='PAIS').get_data(as_text=True)
 
     assert Usuario.query.filter_by(re='7777').first() is None
+    assert 'inválido' in html, 'a recusa tem de dizer por que, não só não gravar'
+
+
+def test_nivel_global_grava(admin_client, loc):
+    """O contraponto do teste acima: o nível que ESTÁ na lista passa."""
+    _cadastrar_usuario(admin_client, nivel_acesso='GLOBAL')
+
+    assert Usuario.query.filter_by(re='7777').first() is not None
 
 
 def test_usuario_global_nao_precisa_de_escopo(admin_client, loc):

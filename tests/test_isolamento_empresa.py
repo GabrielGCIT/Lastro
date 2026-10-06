@@ -128,6 +128,30 @@ def test_trocar_contexto_aceita_cd_da_propria_empresa(app, cenario):
         assert s.get('view_context') == f'CD:{cenario.locA.id}'
 
 
+def test_trocar_contexto_recusa_formato_herdado(app, cenario):
+    """🔴 L2 — "PAIS:BR" não existe mais, e passava pela guarda de empresa.
+
+    `_contexto_na_empresa` só confere o id quando o contexto começa com "CD:";
+    qualquer outra string ela aprova, porque antes PAIS:/AMERICA: eram recortes
+    legítimos resolvidos na leitura. Sem a checagem de FORMATO, um "PAIS:BR"
+    seria gravado na sessão e `_escopo_geografico` cairia no fallback
+    fail-closed: a pessoa veria zero coletores em todas as telas, sem nenhuma
+    mensagem dizendo por quê. Fechar calado é pior que recusar.
+    """
+    cA = _cliente_logado(app, cenario.userA)
+    cA.post('/contexto/trocar', data={'contexto': 'PAIS:BR'})
+    with cA.session_transaction() as s:
+        assert s.get('view_context') != 'PAIS:BR', 'contexto morto entrou na sessão'
+
+
+def test_trocar_contexto_recusa_cd_sem_numero(app, cenario):
+    """"CD:" com lixo no lugar do id — o int() tem de barrar, não estourar."""
+    cA = _cliente_logado(app, cenario.userA)
+    cA.post('/contexto/trocar', data={'contexto': 'CD:abc'})
+    with cA.session_transaction() as s:
+        assert s.get('view_context') != 'CD:abc'
+
+
 # ---------------------------------------------------------------------------
 # LogAuditoria — carimbo + filtro por empresa
 # ---------------------------------------------------------------------------
