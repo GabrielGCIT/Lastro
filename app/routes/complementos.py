@@ -285,7 +285,7 @@ def item_criar():
     # próxima fatia chama, e desfazer o vínculo nunca deixou de ser possível.
     permitidas = get_filtro_localidade()
     if localidade_id and permitidas is not None and localidade_id not in permitidas:
-        flash('Localidade fora dos CDs que você acessa.', 'danger')
+        flash('Esse CD não está entre os que você acessa.', 'danger')
         return redirect(url_for('complementos.index'))
 
     db.session.add(ItemComplementar(
@@ -395,7 +395,7 @@ def estoque_salvar():
         return redirect(url_for('complementos.index'))
     permitidas = get_filtro_localidade()
     if not localidade_id or (permitidas is not None and localidade_id not in permitidas):
-        flash('Localidade inválida ou fora dos CDs que você acessa.', 'danger')
+        flash('CD inválido ou fora dos que você acessa.', 'danger')
         return redirect(url_for('complementos.index'))
     if qtd is None or qtd < 0:
         flash('Informe uma quantidade válida (0 ou mais).', 'danger')

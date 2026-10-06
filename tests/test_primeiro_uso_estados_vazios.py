@@ -81,7 +81,10 @@ def test_sem_alcance_nao_manda_cadastrar(app, cliente_logado, usuario_sem_locali
     c = cliente_logado(usuario_sem_localidade)
     html = c.get('/coletores').get_data(as_text=True)
 
-    assert 'localidade atribuída' in html
+    # Casa com o texto de `msg.sem_alcance` (translations/pt.json). Se aquele
+    # texto mudar, este assert é o lugar certo para quebrar: o que o teste
+    # defende é que a tela EXPLICA a ausência em vez de convidar a cadastrar.
+    assert 'CD atribuído' in html
     assert 'Nenhum coletor cadastrado ainda' not in html, \
         'mandou cadastrar um coletor que já existe'
 

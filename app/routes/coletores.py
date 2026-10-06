@@ -274,7 +274,7 @@ def gerenciar_localidades():
             if not sigla or not nome:
                 flash('Sigla e nome são obrigatórios.', 'danger')
             elif empresa_id is None:
-                flash('Escolha uma empresa no topo da tela para criar uma localidade.', 'warning')
+                flash('Escolha uma empresa no topo da tela para criar um CD.', 'warning')
             elif Localidade.query.filter(
                 Localidade.empresa_id == empresa_id,      # S1/família D — unicidade por empresa
                 Localidade.sigla == sigla,
@@ -283,9 +283,9 @@ def gerenciar_localidades():
             else:
                 db.session.add(Localidade(sigla=sigla, nome=nome, descricao=desc,
                                           empresa_id=empresa_id))
-                registrar_log('CREATE_LOCALIDADE', f'Localidade {sigla} criada.')
+                registrar_log('CREATE_LOCALIDADE', f'CD {sigla} criado.')
                 db.session.commit()
-                flash(f'Localidade {sigla} — {nome} criada com sucesso.', 'success')
+                flash(f'CD {sigla} — {nome} criado com sucesso.', 'success')
 
         elif acao == 'editar':
             # S2/família B — localidade de outro tenant é invisível (nunca 403).
@@ -312,9 +312,9 @@ def gerenciar_localidades():
                 loc.sigla     = nova_sigla
                 loc.nome      = novo_nome
                 loc.descricao = request.form.get('descricao', '').strip() or None
-                registrar_log('UPDATE_LOCALIDADE', f'Localidade {loc.sigla} atualizada.')
+                registrar_log('UPDATE_LOCALIDADE', f'CD {loc.sigla} atualizado.')
                 db.session.commit()
-                flash(f'Localidade {loc.sigla} atualizada.', 'success')
+                flash(f'CD {loc.sigla} atualizado.', 'success')
 
         elif acao == 'excluir':
             # S2/família B — localidade de outro tenant é invisível (nunca 403).
@@ -327,9 +327,9 @@ def gerenciar_localidades():
                 else:
                     sigla = loc.sigla
                     db.session.delete(loc)
-                    registrar_log('DELETE_LOCALIDADE', f'Localidade {sigla} excluída.')
+                    registrar_log('DELETE_LOCALIDADE', f'CD {sigla} excluído.')
                     db.session.commit()
-                    flash(f'Localidade {sigla} excluída.', 'success')
+                    flash(f'CD {sigla} excluído.', 'success')
 
         return redirect(url_for('coletores.gerenciar_localidades'))
 
