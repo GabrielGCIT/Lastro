@@ -144,9 +144,11 @@ python --version >nul 2>&1
 if errorlevel 1 (
     echo [ERRO] O Python nao foi encontrado nesta maquina.
     echo.
-    echo    Instale o Python 3.10 ou mais novo, marcando a opcao
-    echo    "Add Python to PATH" durante a instalacao, e rode este
-    echo    arquivo de novo.
+    echo    Instale uma destas versoes: VERSOES_SUPORTADAS ^(64 bits^),
+    echo    marcando a opcao "Add Python to PATH" durante a instalacao,
+    echo    e rode este arquivo de novo.
+    echo.
+    echo    Baixe em: https://www.python.org/downloads/windows/
     echo.
     pause
     exit /b 1
