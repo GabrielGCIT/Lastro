@@ -15,3 +15,9 @@ uploads/
 
 # Copias de seguranca geradas pelo proprio sistema
 backups/
+
+# Registro de eventos gerado em execucao
+logs/
+
+# Pacotes de entrega gerados por scripts/empacotar.py
+dist/

@@ -14,8 +14,9 @@ debugger executa código Python enviado pelo navegador.
 """
 import os
 
-from app import create_app
+from app import ROOT_DIR, create_app
 from app.helpers import preparar_primeiro_acesso
+from app.registro import anunciar, configurar as configurar_log
 from app.startup import executar_startup
 
 app = create_app()
@@ -25,17 +26,27 @@ def anunciar_primeiro_acesso(porta):
     token = preparar_primeiro_acesso()
     if not token:
         return
-    print('=' * 72)
-    print('[PRIMEIRO ACESSO] Esta instalacao ainda nao tem administrador.')
-    print('[PRIMEIRO ACESSO] Abra no navegador, nesta maquina ou na rede:')
-    print(f'[PRIMEIRO ACESSO]   http://<endereco-do-servidor>:{porta}/primeiro-acesso/{token}')
-    print(f'[PRIMEIRO ACESSO]   (nesta maquina: http://127.0.0.1:{porta}/primeiro-acesso/{token})')
-    print('[PRIMEIRO ACESSO] O endereco deixa de valer assim que o administrador for criado.')
-    print('=' * 72)
+    # `anunciar` imprime com flush: sem isso estas linhas podem nunca aparecer,
+    # e quem instala fica olhando uma tela preta sem saber o endereco de acesso.
+    anunciar('=' * 72)
+    anunciar('[PRIMEIRO ACESSO] Esta instalacao ainda nao tem administrador.')
+    anunciar('[PRIMEIRO ACESSO] Abra no navegador, nesta maquina ou na rede:')
+    anunciar(f'[PRIMEIRO ACESSO]   http://<endereco-do-servidor>:{porta}/primeiro-acesso/{token}')
+    anunciar(f'[PRIMEIRO ACESSO]   (nesta maquina: http://127.0.0.1:{porta}/primeiro-acesso/{token})')
+    anunciar('[PRIMEIRO ACESSO] O endereco deixa de valer assim que o administrador for criado.')
+    anunciar('=' * 72)
 
 
 if __name__ == '__main__':
     porta = int(os.environ.get('PORT', 5001))
+
+    arquivo_log = configurar_log(app, ROOT_DIR)
+    if arquivo_log:
+        anunciar(f'[MBAssets] Registro de eventos em {arquivo_log}')
+    else:
+        anunciar('[MBAssets] AVISO: nao consegui gravar o arquivo de log. '
+                 'O sistema sobe assim mesmo; veja a tela de Saude do sistema.')
+
     with app.app_context():
         executar_startup()
         anunciar_primeiro_acesso(porta)
@@ -44,5 +55,16 @@ if __name__ == '__main__':
     from app.agendador import iniciar as iniciar_backup
     iniciar_backup(app)
 
-    debug = os.environ.get('MBASSETS_DEBUG') == '1'
-    app.run(debug=debug, host='0.0.0.0', port=porta)
+    if os.environ.get('MBASSETS_DEBUG') == '1':
+        # Só para desenvolver: recarga automática e o debugger do Werkzeug.
+        app.run(debug=True, host='0.0.0.0', port=porta)
+    else:
+        # 🔴 `app.run()` é o servidor de DESENVOLVIMENTO do Flask: atende um
+        # pedido por vez e imprime um aviso em letras garrafais dizendo para não
+        # usá-lo em produção. No balcão há vários postos bipando ao mesmo tempo,
+        # e um deles esperando o outro terminar é fila na pista.
+        from waitress import serve
+        app.logger.info('MBAssets iniciado na porta %s', porta)
+        anunciar(f'[MBAssets] No ar na porta {porta}. Esta janela pode ficar aberta.')
+        serve(app, host='0.0.0.0', port=porta, threads=8,
+              ident='MBAssets')

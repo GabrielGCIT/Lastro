@@ -9,6 +9,6 @@ Jinja2==3.1.2
 click==8.1.7
 itsdangerous==2.1.2
 blinker==1.7.0
-
-# Desenvolvimento / testes
-pytest==9.1.1
+# Servidor de producao. O `app.run()` do Flask e de desenvolvimento: um pedido
+# por vez e um aviso em letras garrafais no console. O balcao tem varios postos.
+waitress==3.0.0

@@ -1,0 +1,6 @@
+# Ferramentas de desenvolvimento. NÃO vão no pacote entregue — o cliente não
+# roda teste, e cada componente a mais na máquina dele é mais superfície para o
+# time de segurança questionar.
+#
+#     pip install -r requirements.txt -r requirements-dev.txt
+pytest==9.1.1

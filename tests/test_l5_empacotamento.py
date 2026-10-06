@@ -1,0 +1,217 @@
+"""
+O que entra — e o que nunca pode entrar — no pacote entregue.
+
+🔴 Este arquivo existe por causa da fronteira entre os dois produtos.
+
+O pacote é a única coisa que sai daqui. Um arquivo a mais nele é um arquivo que
+a Martin Brower passa a ter, para sempre, sem que ninguém perceba: o histórico
+do Git carregaria todo o desenvolvimento; `instance/` levaria o banco de quem
+desenvolveu; `tests/` levaria os cenários, com nomes e REs de exemplo.
+
+E o modo de falhar é silencioso — o pacote funciona igual com ou sem esses
+arquivos. Ninguém descobre abrindo o sistema; só abrindo o ZIP.
+
+🔴 A primeira versão destes testes passava POR ENGANO. Descobri sabotando:
+apaguei a lista `LIXO` inteira do empacotador e tudo continuou verde, porque no
+momento em que os testes rodaram não havia `__pycache__` nas pastas copiadas, e
+`tests/` ou `.git` jamais estariam DENTRO de `app/`. Os testes não provavam a
+guarda; provavam que o cenário estava limpo. Agora o cenário é sujo de propósito
+(ver a fixture `sujeira_plantada`) e a varredura percorre a árvore inteira, não
+só a raiz — porque é dentro das pastas que esse tipo de coisa se esconde.
+"""
+import importlib.util
+import os
+
+import pytest
+
+from app import ROOT_DIR
+
+_spec = importlib.util.spec_from_file_location(
+    'empacotar', os.path.join(ROOT_DIR, 'scripts', 'empacotar.py'))
+empacotar = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(empacotar)
+
+
+# Nada disto pode acabar no pacote. Lista separada da do empacotador de
+# propósito: se as duas saírem do mesmo lugar, o teste concorda com o erro.
+JAMAIS = [
+    '.git',           # o desenvolvimento inteiro
+    'tests',          # cenários, nomes e REs de exemplo
+    'instance',       # o banco de quem desenvolveu
+    'uploads',        # fotos de quem desenvolveu
+    'backups',
+    'logs',
+    'venv',
+    '.claude',        # ferramenta de desenvolvimento
+    'dist',
+    'requirements-dev.txt',
+]
+
+
+@pytest.fixture()
+def sujeira_plantada():
+    """Põe lixo DENTRO das pastas que o pacote copia, e limpa depois.
+
+    Sem isto os testes deste arquivo não exercitam nada: a cópia é por inclusão,
+    então o que mora fora de `app/templates/static/translations` nunca entraria
+    de qualquer jeito, com ou sem a lista de exclusão.
+    """
+    plantados = [
+        os.path.join(ROOT_DIR, 'app', '__pycache__', 'naodeveir.pyc'),
+        os.path.join(ROOT_DIR, 'app', 'instance', 'banco-de-quem-desenvolveu.db'),
+        os.path.join(ROOT_DIR, 'templates', '__pycache__', 'naodeveir.pyc'),
+        os.path.join(ROOT_DIR, 'static', 'uploads', 'foto-de-alguem.png'),
+        os.path.join(ROOT_DIR, 'app', 'tests', 'cenario.py'),
+    ]
+    criados = []
+    try:
+        for caminho in plantados:
+            os.makedirs(os.path.dirname(caminho), exist_ok=True)
+            with open(caminho, 'wb') as fh:
+                fh.write(b'nao deve viajar no pacote')
+            criados.append(caminho)
+        yield
+    finally:
+        # O repositório tem de voltar exatamente como estava.
+        for caminho in criados:
+            try:
+                os.remove(caminho)
+            except OSError:
+                pass
+        for caminho in criados:
+            pasta = os.path.dirname(caminho)
+            try:
+                if os.path.isdir(pasta) and not os.listdir(pasta):
+                    os.rmdir(pasta)
+            except OSError:
+                pass
+
+
+@pytest.fixture()
+def pacote(tmp_path, sujeira_plantada):
+    """Monta o pacote numa pasta temporária, SEM baixar dependência.
+
+    O download é lento, precisa de rede e não é o que este arquivo defende.
+    """
+    destino = str(tmp_path / 'MBAssets-teste')
+    os.makedirs(destino)
+    empacotar._copiar(destino)
+    empacotar._escrever_instalador(destino, '9.9.9')
+    empacotar._escrever_iniciar(destino)
+    empacotar._escrever_servico(destino, '9.9.9')
+    empacotar._escrever_atualizar(destino, '9.9.9')
+    empacotar._escrever_leiame(destino, '9.9.9')
+    return destino
+
+
+def test_o_pacote_nao_leva_o_que_e_so_nosso(pacote):
+    """🔴 O nome do arquivo — varrendo a árvore INTEIRA, não só a raiz."""
+    vazou = []
+    for raiz, dirs, arquivos in os.walk(pacote):
+        for nome in list(dirs) + list(arquivos):
+            if nome in JAMAIS:
+                vazou.append(os.path.relpath(os.path.join(raiz, nome), pacote))
+
+    assert not vazou, f'o pacote levaria: {vazou}'
+
+
+def test_nenhum_pycache_viaja_junto(pacote):
+    """Bytecode do nosso ambiente, e peso à toa no pacote."""
+    achados = []
+    for raiz, dirs, _arquivos in os.walk(pacote):
+        if '__pycache__' in dirs:
+            achados.append(os.path.relpath(raiz, pacote))
+
+    assert not achados, f'__pycache__ em: {achados[:5]}'
+
+
+def test_o_pacote_leva_o_que_o_sistema_precisa(pacote):
+    """O contraponto: um empacotador que copiasse NADA passaria nos de cima."""
+    for essencial in ('run.py', 'VERSAO', 'requirements.txt',
+                      'app', 'templates', 'static', 'translations'):
+        assert os.path.exists(os.path.join(pacote, essencial)), \
+            f'o pacote ficaria sem {essencial}'
+
+
+def test_os_estaticos_vao_junto(pacote):
+    """Sem o vendor local, a tela abre sem estilo numa rede sem internet.
+
+    É o tipo de coisa que passa no teste de servidor e aparece só na máquina do
+    cliente — onde o CDN não é alcançável.
+    """
+    vendor = os.path.join(pacote, 'static', 'vendor')
+
+    assert os.path.isdir(vendor), 'os estáticos locais não foram'
+    assert len(os.listdir(vendor)) >= 3, 'faltou biblioteca no vendor'
+
+
+def test_quem_instala_recebe_instrucao_em_portugues(pacote):
+    """O pacote é operado por quem não construiu o sistema."""
+    for arquivo in ('LEIAME.txt', 'instalar.bat', 'iniciar.bat',
+                    'instalar-servico.bat', 'atualizar.bat'):
+        caminho = os.path.join(pacote, arquivo)
+        assert os.path.exists(caminho), f'faltou {arquivo}'
+        with open(caminho, encoding='utf-8') as fh:
+            assert fh.read().strip(), f'{arquivo} está vazio'
+
+
+def test_a_atualizacao_nao_toca_no_banco_nem_nas_fotos(pacote):
+    """🔴 O maior risco da atualização é levar o dado do cliente junto.
+
+    Se alguém acrescentar `instance` ou `uploads` à lista de cópia, este teste
+    fica vermelho — e é a única coisa entre esse erro e um banco de produção
+    sobrescrito.
+    """
+    import re
+
+    with open(os.path.join(pacote, 'atualizar.bat'), encoding='utf-8') as fh:
+        script = fh.read()
+
+    # 🔴 Inspeciona as LISTAS do loop, não uma string literal com o nome da
+    # pasta. A primeira versão deste teste procurava `rmdir "%ALVO%\instance"`,
+    # que nunca apareceria: o script apaga através da variável `%%P`. Quem
+    # acrescentasse `instance` à lista passaria batido — descobri isso tentando
+    # sabotar a guarda e vendo o teste continuar verde.
+    listas = re.findall(r'for %%P in \(([^)]*)\) do', script)
+    assert listas, 'não achei o loop de cópia no atualizar.bat'
+
+    for lista in listas:
+        pastas = lista.split()
+        assert pastas == ['app', 'templates', 'static', 'translations'], \
+            f'a atualização mexeria em {pastas} — só o programa pode ser trocado'
+
+
+def test_a_atualizacao_guarda_a_versao_anterior(pacote):
+    """Sem o caminho de volta, uma versão ruim é um problema sem saída."""
+    with open(os.path.join(pacote, 'atualizar.bat'), encoding='utf-8') as fh:
+        script = fh.read()
+
+    assert 'versao-anterior' in script
+
+
+def test_o_instalador_nao_busca_nada_na_internet(pacote):
+    """🔴 A exigência que o time de segurança vai cobrar.
+
+    `--no-index` é o que impede o pip de procurar o PyPI mesmo havendo rede.
+    Sem ele, a instalação "funciona" na máquina com internet e falha na que não
+    tem — e o motivo não seria óbvio para quem estivesse instalando.
+    """
+    with open(os.path.join(pacote, 'instalar.bat'), encoding='utf-8') as fh:
+        script = fh.read()
+
+    assert '--no-index' in script, 'o instalador buscaria pacote na internet'
+    assert '--find-links' in script, 'o instalador não aponta para as dependências locais'
+
+
+def test_o_servico_nao_depende_da_senha_de_ninguem(pacote):
+    """🔴 Tarefa amarrada a uma conta de pessoa morre na troca de senha.
+
+    E a política de senha corporativa garante que a troca vai acontecer. O
+    sintoma seria o sistema deixar de subir depois de um reinício, meses depois,
+    sem relação aparente com nada.
+    """
+    with open(os.path.join(pacote, 'instalar-servico.bat'), encoding='utf-8') as fh:
+        script = fh.read()
+
+    assert '/RU "SYSTEM"' in script, 'o serviço rodaria como uma conta de pessoa'
+    assert '/SC ONSTART' in script, 'o serviço não subiria sozinho no boot'
