@@ -98,6 +98,7 @@ def pacote(tmp_path, sujeira_plantada):
     empacotar._copiar(destino)
     empacotar._escrever_instalador(destino, '9.9.9')
     empacotar._escrever_iniciar(destino)
+    empacotar._escrever_servico_run(destino)
     empacotar._escrever_servico(destino, '9.9.9')
     empacotar._escrever_atualizar(destino, '9.9.9')
     empacotar._escrever_leiame(destino, '9.9.9')
@@ -215,3 +216,39 @@ def test_o_servico_nao_depende_da_senha_de_ninguem(pacote):
 
     assert '/RU "SYSTEM"' in script, 'o serviço rodaria como uma conta de pessoa'
     assert '/SC ONSTART' in script, 'o serviço não subiria sozinho no boot'
+
+
+def test_o_comando_do_servico_cabe_no_limite_do_windows(pacote):
+    """🔴 `schtasks /TR` recusa mais de 261 caracteres.
+
+    Achado rodando o comando de verdade: com o caminho do python E o do run.py,
+    uma instalação em pasta funda estoura o limite e o serviço simplesmente não
+    registra — com uma mensagem sobre "tamanho de opção" que não diz a ninguém o
+    que fazer. O /TR passou a apontar para um .bat só, que resolve o resto.
+
+    O teste mede o pior caso realista: uma pasta de caminho bem fundo.
+    """
+    with open(os.path.join(pacote, 'instalar-servico.bat'), encoding='utf-8') as fh:
+        script = fh.read()
+
+    assert '/TR "%~dp0servico-run.bat"' in script, \
+        'o /TR voltou a conter caminho completo — vai estourar o limite de 261'
+
+    pasta_funda = os.path.join(
+        r'C:\Users\nome.sobrenome\Documents', 'Sistemas Internos',
+        'Controle de Coletores', 'MBAssets-1.0.0')
+    comando = os.path.join(pasta_funda, 'servico-run.bat')
+    assert len(comando) < 261, f'{len(comando)} caracteres no pior caso'
+
+
+def test_o_arquivo_que_a_tarefa_executa_existe(pacote):
+    """O /TR aponta para ele; se não vier no pacote, o serviço falha no boot —
+    e o sintoma seria o sistema simplesmente não subir, sem erro em lugar algum
+    que alguém vá procurar."""
+    caminho = os.path.join(pacote, 'servico-run.bat')
+
+    assert os.path.exists(caminho)
+    with open(caminho, encoding='utf-8') as fh:
+        conteudo = fh.read()
+    assert '%~dp0run.py' in conteudo, 'o .bat não chama o sistema'
+    assert 'cd /d "%~dp0"' in conteudo,         'sem o cd, o banco e os uploads seriam procurados na pasta errada'

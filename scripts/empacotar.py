@@ -178,6 +178,28 @@ pause
     _gravar(os.path.join(destino, 'iniciar.bat'), conteudo)
 
 
+def _escrever_servico_run(destino):
+    """O arquivo que a Tarefa Agendada executa.
+
+    🔴 Existe por causa de um limite do Windows que eu só descobri testando:
+    `schtasks /TR` recusa mais de 261 caracteres. Passar o caminho completo do
+    python MAIS o do run.py estourava isso numa pasta de caminho fundo — que é
+    onde as pessoas instalam, tipo "C:\\Users\\fulano\\Documents\\Sistemas\\...".
+
+    O erro aparecia só na hora de registrar o serviço, com uma mensagem sobre
+    tamanho de opção que não ajuda ninguém a entender o que fazer. Agora a
+    tarefa aponta para ESTE arquivo — um caminho só — e ele descobre o resto
+    sozinho com %~dp0.
+    """
+    conteudo = '''@echo off
+rem Executado pela Tarefa Agendada "MBAssets" quando o servidor liga.
+rem Para iniciar o sistema na mao, use o iniciar.bat.
+cd /d "%~dp0"
+"%~dp0venv\\Scripts\\python.exe" "%~dp0run.py"
+'''
+    _gravar(os.path.join(destino, 'servico-run.bat'), conteudo)
+
+
 def _escrever_servico(destino, versao):
     """Registra o sistema como Tarefa Agendada que roda no boot.
 
@@ -206,7 +228,7 @@ if errorlevel 1 (
 
 echo Registrando o MBAssets para iniciar junto com o Windows...
 schtasks /Create /TN "MBAssets" /SC ONSTART /RU "SYSTEM" /RL HIGHEST /F ^
-    /TR "\\"%~dp0venv\\Scripts\\python.exe\\" \\"%~dp0run.py\\""
+    /TR "%~dp0servico-run.bat"
 if errorlevel 1 (
     echo [ERRO] Nao consegui registrar. Confira se a politica da maquina
     echo    permite criar tarefas agendadas.
@@ -370,6 +392,7 @@ def main():
     _copiar(pasta)
     _escrever_instalador(pasta, versao)
     _escrever_iniciar(pasta)
+    _escrever_servico_run(pasta)
     _escrever_servico(pasta, versao)
     _escrever_atualizar(pasta, versao)
     _escrever_leiame(pasta, versao)
