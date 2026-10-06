@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}{{ t('sobre.titulo') }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid fade-in">
+{# Serve a tres leitores: quem usa (o que o sistema faz), quem administra (a
+   versao exata, para relatar problema ou conferir atualizacao) e o time de
+   seguranca (o que roda aqui dentro e sob qual licenca). Por isso as secoes
+   sao separadas em vez de um texto corrido. #}
+
+<div class="page-header">
+    <h1 class="h3 fw-bold mb-1">
+        <i class="fa-solid fa-circle-info me-2"></i>{{ t('sobre.titulo') }}
+    </h1>
+    <p class="text-muted mb-0">{{ t('sobre.subtitulo') }}</p>
+</div>
+
+{# ── Identificacao ─────────────────────────────────────────────────────── #}
+<div class="card card-custom mb-4">
+    <div class="card-body text-center py-4">
+        <h2 class="display-6 fw-bold mb-1">{{ s.NOME }}</h2>
+        <p class="text-muted mb-3">{{ s.DESCRICAO_CURTA }}</p>
+        <span class="badge bg-dark fs-6 px-3 py-2 font-monospace">
+            {{ t('sobre.versao') }} {{ versao }}
+        </span>
+    </div>
+</div>
+
+{# ── Proposito ─────────────────────────────────────────────────────────── #}
+<div class="card card-custom mb-4">
+    <div class="card-header bg-transparent py-3">
+        <h2 class="h6 fw-bold mb-0">
+            <i class="fa-solid fa-bullseye me-2" style="color: var(--accent);"></i>{{ t('sobre.proposito') }}
+        </h2>
+    </div>
+    <div class="card-body">
+        <p class="mb-0">{{ s.PROPOSITO }}</p>
+    </div>
+</div>
+
+{# ── O que o sistema controla ──────────────────────────────────────────── #}
+<div class="card card-custom mb-4">
+    <div class="card-header bg-transparent py-3">
+        <h2 class="h6 fw-bold mb-0">
+            <i class="fa-solid fa-list-check me-2" style="color: var(--accent);"></i>{{ t('sobre.controles') }}
+        </h2>
+    </div>
+    <div class="list-group list-group-flush">
+        {% for icone, titulo, descricao in s.CONTROLES %}
+        <div class="list-group-item py-3">
+            <div class="d-flex align-items-start gap-3">
+                <i class="fa-solid fa-{{ icone }} mt-1" style="color: var(--accent); width: 1.2rem;"></i>
+                <div>
+                    <div class="fw-bold">{{ titulo }}</div>
+                    <div class="small text-muted">{{ descricao }}</div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{# ── Autoria ───────────────────────────────────────────────────────────── #}
+<div class="card card-custom mb-4 border-2" style="border-color: var(--accent) !important;">
+    <div class="card-header bg-transparent py-3">
+        <h2 class="h6 fw-bold mb-0">
+            <i class="fa-solid fa-signature me-2" style="color: var(--accent);"></i>{{ t('sobre.autoria') }}
+        </h2>
+    </div>
+    <div class="card-body">
+        <div class="d-flex align-items-center gap-3 mb-3">
+            <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+                 style="width:3rem;height:3rem;background:var(--accent);color:#fff;font-weight:700;font-size:1.1rem;">
+                GC
+            </div>
+            <div>
+                <div class="fw-bold fs-5">{{ s.AUTOR }}</div>
+                <div class="small text-muted">{{ t('sobre.autor_papel') }}</div>
+            </div>
+        </div>
+        <p class="mb-0">{{ s.TITULARIDADE }}</p>
+    </div>
+</div>
+
+{# ── Licenca ───────────────────────────────────────────────────────────── #}
+<div class="card card-custom mb-4">
+    <div class="card-header bg-transparent py-3">
+        <h2 class="h6 fw-bold mb-0">
+            <i class="fa-solid fa-scale-balanced me-2" style="color: var(--accent);"></i>{{ s.LICENCA_TITULO }}
+        </h2>
+    </div>
+    <div class="list-group list-group-flush">
+        {% for titulo, texto in s.LICENCA %}
+        <div class="list-group-item py-3">
+            <div class="fw-bold small mb-1">{{ titulo }}</div>
+            <div class="small text-muted">{{ texto }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{# ── Componentes ───────────────────────────────────────────────────────── #}
+<div class="card card-custom mb-4">
+    <div class="card-header bg-transparent py-3">
+        <h2 class="h6 fw-bold mb-0">
+            <i class="fa-solid fa-cubes me-2" style="color: var(--accent);"></i>{{ t('sobre.componentes') }}
+        </h2>
+    </div>
+    <div class="card-body pb-2">
+        <p class="small text-muted">{{ s.NOTA_COMPONENTES }}</p>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr class="small text-muted text-uppercase">
+                        <th>{{ t('sobre.col_componente') }}</th>
+                        <th>{{ t('sobre.col_versao') }}</th>
+                        <th>{{ t('sobre.col_licenca') }}</th>
+                        <th>{{ t('sobre.col_para_que') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for nome, ver, licenca, para_que in s.COMPONENTES %}
+                    <tr>
+                        <td class="fw-bold small">{{ nome }}</td>
+                        <td class="small font-monospace text-muted">{{ ver }}</td>
+                        <td class="small"><span class="badge bg-light text-dark border">{{ licenca }}</span></td>
+                        <td class="small text-muted">{{ para_que }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<p class="text-center text-muted small">
+    {{ s.NOME }} &copy; {{ s.ANO }} &nbsp;·&nbsp; {{ s.AUTOR }}
+</p>
+</div>
+{% endblock %}

@@ -1111,6 +1111,20 @@ def gerenciar_usuarios():
                            senha_minima=SENHA_MINIMA)
 
 
+@dashboard_bp.route('/sobre')
+@login_required
+def sobre():
+    """Identificação, autoria, licença e o que roda dentro do sistema.
+
+    Sem permissão específica: é informação que qualquer pessoa que usa o
+    sistema tem o direito de ver — inclusive de quem é o trabalho.
+    """
+    from app import ROOT_DIR
+    from app import sobre as s
+
+    return render_template('sobre.html', s=s, versao=s.versao(ROOT_DIR))
+
+
 @dashboard_bp.route('/ajuda')
 @login_required
 def ajuda():

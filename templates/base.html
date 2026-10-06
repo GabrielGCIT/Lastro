@@ -941,6 +941,10 @@
                        href="{{ url_for('dashboard.glossario') }}">
                         <i class="fa-solid fa-book"></i> {{ t('nav.glossario') }}
                     </a>
+                    <a class="sidebar-link {{ 'active' if request.endpoint == 'dashboard.sobre' else '' }}"
+                       href="{{ url_for('dashboard.sobre') }}">
+                        <i class="fa-solid fa-circle-info"></i> {{ t('nav.sobre') }}
+                    </a>
 
                 </nav>
                 {% endblock sidebar_nav %}
