@@ -226,7 +226,25 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo Registrando o Lastro para iniciar junto com o Windows...
+echo [1/2] Liberando o acesso pela rede...
+rem 🔴 Sem esta regra o sistema sobe, funciona na tela de quem instalou, e
+rem NAO abre em mais nenhuma maquina do CD. O Windows aceita a conexao local
+rem (que nao atravessa o firewall de entrada) e recusa a de qualquer outro
+rem aparelho -- sem erro no log, sem nada quebrado: so nao abre. E a conclusao
+rem de quem esta do outro lado e "o sistema nao funciona".
+rem TCP de proposito: HTTP e TCP. Uma regra UDP com o mesmo numero nao serve.
+netsh advfirewall firewall delete rule name="Lastro (HTTP)" >nul 2>&1
+netsh advfirewall firewall add rule name="Lastro (HTTP)" dir=in action=allow ^
+    protocol=TCP localport=5001 profile=any >nul
+if errorlevel 1 (
+    echo    [AVISO] Nao consegui liberar a porta 5001 no firewall.
+    echo    O sistema vai funcionar nesta maquina, mas pode nao abrir nas outras.
+    echo    Peca a quem cuida da rede para liberar a porta 5001 ^(TCP^).
+) else (
+    echo    Porta 5001 liberada.
+)
+
+echo [2/2] Registrando o Lastro para iniciar junto com o Windows...
 schtasks /Create /TN "Lastro" /SC ONSTART /RU "SYSTEM" /RL HIGHEST /F ^
     /TR "%~dp0servico-run.bat"
 if errorlevel 1 (
