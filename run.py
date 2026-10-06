@@ -40,5 +40,9 @@ if __name__ == '__main__':
         executar_startup()
         anunciar_primeiro_acesso(porta)
 
+    # O backup diário sobe junto com o serviço: nada a agendar por fora.
+    from app.agendador import iniciar as iniciar_backup
+    iniciar_backup(app)
+
     debug = os.environ.get('MBASSETS_DEBUG') == '1'
     app.run(debug=debug, host='0.0.0.0', port=porta)

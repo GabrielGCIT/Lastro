@@ -45,6 +45,13 @@
     {% endif %}
 
     {% if has_permissao('auditoria.ver') %}
+    <a class="sidebar-link {{ 'active' if request.endpoint == 'dashboard.saude' else '' }}"
+       href="{{ url_for('dashboard.saude') }}">
+        <i class="fa-solid fa-heart-pulse"></i> {{ t('nav.saude') }}
+    </a>
+    {% endif %}
+
+    {% if has_permissao('auditoria.ver') %}
     <a class="sidebar-link {{ 'active' if request.endpoint == 'dashboard.auditoria' else '' }}"
        href="{{ url_for('dashboard.auditoria') }}"
        style="{{ 'color: rgba(220,53,69,0.8)' if request.endpoint != 'dashboard.auditoria' else '' }}">

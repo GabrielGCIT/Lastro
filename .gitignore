@@ -12,3 +12,6 @@ uploads/
 
 # Ferramentas de desenvolvimento — nao fazem parte do produto entregue
 .claude/
+
+# Copias de seguranca geradas pelo proprio sistema
+backups/

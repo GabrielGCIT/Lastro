@@ -1,0 +1,57 @@
+{% extends "base_hub.html" %}
+{% block title %}{{ t('saude.titulo') }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid fade-in">
+{# Esta tela existe para alguem que NAO construiu o sistema abrir num dia ruim.
+   Por isso cada item diz o que esta acontecendo e o que fazer -- nunca so um
+   numero ou um selo colorido. O veredito geral e o PIOR dos itens: quem abre
+   aqui precisa de uma resposta so. #}
+{% set cores = {'ok': 'success', 'atencao': 'warning', 'erro': 'danger'} %}
+{% set icones = {'ok': 'circle-check', 'atencao': 'triangle-exclamation', 'erro': 'circle-xmark'} %}
+
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-1">
+    <h1 class="h3 fw-bold mb-0">
+        <i class="fa-solid fa-heart-pulse me-2"></i>{{ t('saude.titulo') }}
+    </h1>
+    <span class="badge bg-light text-dark border">
+        {{ t('saude.versao') }}: <strong class="font-monospace">{{ diag.versao }}</strong>
+    </span>
+</div>
+<p class="text-muted">{{ t('saude.subtitulo') }}</p>
+
+<div class="alert alert-{{ cores[diag.geral] }} d-flex align-items-center gap-3 mt-3">
+    <i class="fa-solid fa-{{ icones[diag.geral] }} fa-2x"></i>
+    <div>
+        <div class="fw-bold">{{ t('saude.geral.' ~ diag.geral) }}</div>
+        <div class="small">{{ t('saude.geral_sub.' ~ diag.geral) }}</div>
+    </div>
+</div>
+
+<div class="card card-custom mt-3">
+    <div class="list-group list-group-flush">
+        {% for item in diag.itens %}
+        <div class="list-group-item py-3">
+            <div class="d-flex align-items-start gap-3">
+                <i class="fa-solid fa-{{ icones[item.situacao] }} text-{{ cores[item.situacao] }} mt-1"></i>
+                <div class="flex-grow-1">
+                    <div class="fw-bold">{{ item.nome }}</div>
+                    <div class="small">{{ item.resumo }}</div>
+                    {% if item.detalhe %}
+                    <div class="small text-muted mt-1">{{ item.detalhe }}</div>
+                    {% endif %}
+                </div>
+                <span class="badge bg-{{ cores[item.situacao] }}">
+                    {{ t('saude.situacao.' ~ item.situacao) }}
+                </span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<p class="text-muted small mt-3">
+    <i class="fa-solid fa-circle-info me-1"></i>{{ t('saude.rodape') }}
+</p>
+</div>
+{% endblock %}

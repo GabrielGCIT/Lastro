@@ -16,7 +16,7 @@ import io
 import os
 from datetime import datetime, date
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, make_response, send_from_directory, jsonify, abort
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, make_response, send_from_directory, jsonify, abort, current_app
 from sqlalchemy import func, case
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -817,6 +817,23 @@ def gerenciar_grupos():
     usuarios_por_grupo = {g.id: len(g.usuarios) for g in grupos}
     return render_template('grupos.html', grupos=grupos, modulos=modulos,
                            usuarios_por_grupo=usuarios_por_grupo)
+
+
+@dashboard_bp.route('/saude')
+@permissao_required('auditoria.ver')
+def saude():
+    """Estado do sistema em português — para quem administra, não para quem lê log.
+
+    Mesma permissão da auditoria: é informação de administração da máquina, e
+    quem a vê já vê o log. Não expõe dado de ninguém — fala de disco, backup e
+    arquivos.
+    """
+    from app import ROOT_DIR
+    from app.saude import diagnostico
+
+    return render_template(
+        'saude.html',
+        diag=diagnostico(current_app.config['SQLALCHEMY_DATABASE_URI'], ROOT_DIR))
 
 
 @dashboard_bp.route('/auditoria')
