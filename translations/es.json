@@ -1,4 +1,8 @@
 {
+  "ajuda.rodape": "¿Busca el significado de una palabra? Vea el",
+  "ajuda.sobre_esta_tela": "Ayuda sobre esta pantalla",
+  "ajuda.subtitulo": "Cómo hacer cada cosa — y qué hacer cuando no sale como se espera.",
+  "ajuda.titulo": "Manual del sistema",
   "auditoria.acao_acesso": "ACCESO",
   "auditoria.acao_alterar": "ACTUALIZAR",
   "auditoria.acao_criar": "CREAR",
@@ -567,6 +571,7 @@
   "nav.historico": "Historial",
   "nav.inventario": "Inventario de Activos",
   "nav.localidades": "CD",
+  "nav.manual": "Manual",
   "nav.movimentacao": "Movimiento",
   "nav.notas_fiscais": "Facturas",
   "nav.painel_operacional": "Panel Operacional",

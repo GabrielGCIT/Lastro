@@ -1,4 +1,8 @@
 {
+  "ajuda.rodape": "Looking for what a word means? See the",
+  "ajuda.sobre_esta_tela": "Help about this screen",
+  "ajuda.subtitulo": "How to do each task — and what to do when it does not go as expected.",
+  "ajuda.titulo": "System manual",
   "auditoria.acao_acesso": "ACCESS",
   "auditoria.acao_alterar": "UPDATE",
   "auditoria.acao_criar": "CREATE",
@@ -567,6 +571,7 @@
   "nav.historico": "History",
   "nav.inventario": "Asset Inventory",
   "nav.localidades": "DCs",
+  "nav.manual": "Manual",
   "nav.movimentacao": "Movement",
   "nav.notas_fiscais": "Invoices",
   "nav.painel_operacional": "Operations Panel",

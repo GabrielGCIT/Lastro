@@ -1111,6 +1111,23 @@ def gerenciar_usuarios():
                            senha_minima=SENHA_MINIMA)
 
 
+@dashboard_bp.route('/ajuda')
+@login_required
+def ajuda():
+    """O manual do sistema, por tarefa.
+
+    Sem permissão específica, pela mesma razão do glossário: ajuda que só
+    algumas pessoas podem abrir falha justamente com quem mais precisa dela.
+
+    Aceita ?secao=<id> para o "?" das telas cair direto no assunto certo.
+    """
+    from app.ajuda import SECOES, secao_por_id
+
+    pedida = request.args.get('secao') or ''
+    return render_template('ajuda.html', secoes=SECOES,
+                           secao_aberta=(secao_por_id(pedida) or {}).get('id'))
+
+
 @dashboard_bp.route('/glossario')
 @login_required
 def glossario():

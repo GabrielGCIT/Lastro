@@ -309,7 +309,12 @@ def create_app(database_url=None):
         cor_acento_seguro = _cor_segura(session.get('cor_acento'))
         tema_pref = session.get('tema') or 'light'
 
+        # Qual seção do manual o "?" desta tela abre (None esconde o botão).
+        from app.ajuda import secao_da_tela
+        from flask import request as _req
+
         return dict(
+            ajuda_desta_tela=secao_da_tela(_req.endpoint),
             mapa_diagnostico=DIAGNOSTICO_MAPA,
             mapa_diagnostico_i18n=mapa_diagnostico_i18n,
             foto_perfil_url=foto_perfil_url,

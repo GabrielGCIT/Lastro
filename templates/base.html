@@ -933,6 +933,10 @@
                        exigir permissão. Um glossário que só alguns conseguem abrir
                        falha justamente com quem mais precisa dele. #}
                     <span class="sidebar-label mt-4 mb-2">{{ t('nav.ajuda') }}</span>
+                    <a class="sidebar-link {{ 'active' if request.endpoint == 'dashboard.ajuda' else '' }}"
+                       href="{{ url_for('dashboard.ajuda') }}">
+                        <i class="fa-solid fa-book-open"></i> {{ t('nav.manual') }}
+                    </a>
                     <a class="sidebar-link {{ 'active' if request.endpoint == 'dashboard.glossario' else '' }}"
                        href="{{ url_for('dashboard.glossario') }}">
                         <i class="fa-solid fa-book"></i> {{ t('nav.glossario') }}
@@ -968,6 +972,19 @@
             {% endblock sidebar_column %}
 
             <main class="{% block main_column_class %}col-lg-10 ms-sm-auto{% endblock %} px-md-4 py-4">
+
+                {# O "?" leva ao assunto DESTA tela, nao ao inicio do manual.
+                   Quem trava no balcao nao vai ler o indice inteiro para achar
+                   a resposta; se o atalho nao economiza esse caminho, ele nao
+                   serve para nada. So aparece onde ha secao mapeada. #}
+                {% set secao_ajuda = ajuda_desta_tela %}
+                {% if secao_ajuda %}
+                <a href="{{ url_for('dashboard.ajuda', secao=secao_ajuda) }}"
+                   class="btn btn-sm btn-outline-secondary float-end ms-2"
+                   title="{{ t('ajuda.sobre_esta_tela') }}">
+                    <i class="fa-solid fa-circle-question"></i>
+                </a>
+                {% endif %}
 
                 {% with messages = get_flashed_messages(with_categories=true) %}
                   {% if messages %}
