@@ -184,7 +184,9 @@ def test_antivirus_com_firewall_proprio_e_avisado(monkeypatch):
 
     assert item is not None, 'não avisou sobre o segundo firewall'
     assert 'Kaspersky' in item['resumo']
-    assert '5001' in item['detalhe'], 'o aviso tem de dizer o que liberar'
+    # Não crava o número da porta: ela é configurável desde que a troca pelo
+    # arquivo passou a existir, e um aviso com a porta errada é pior que nenhum.
+    assert 'porta' in item['detalhe'].lower(), 'o aviso tem de dizer o que liberar'
 
 
 def test_o_defender_nao_conta_como_outro_firewall(monkeypatch):

@@ -341,9 +341,29 @@ def verificar_outro_firewall():
         'resumo': f"Esta máquina também tem {', '.join(nomes)}.",
         'detalhe': 'Liberar a porta no firewall do Windows pode não bastar: '
                    'um antivírus com firewall próprio barra antes. Se o sistema '
-                   'não abrir em outros aparelhos, libere a porta 5001 (TCP) '
-                   'também nele.',
+                   'não abrir em outros aparelhos, libere nele também a porta '
+                   'que o sistema usa (veja "Porta de acesso" acima).',
     }
+
+
+def verificar_porta(instance_folder):
+    """Qual porta está valendo, e onde mudá-la.
+
+    Existe porque a porta deixou de ser fixa: quem administra pode trocá-la
+    depois da instalação. Sem mostrar na tela, a única forma de saber qual
+    está valendo seria abrir o arquivo — e quem precisa dessa informação
+    costuma ser justamente quem não sabe onde ele fica.
+    """
+    from app.configuracao import PORTA_PADRAO, caminho, porta
+
+    atual = porta(instance_folder)
+    detalhe = f'Para trocar, edite {caminho(instance_folder)} e reinicie.'
+    if atual != PORTA_PADRAO:
+        detalhe += (' Porta diferente da padrão: confirme que ela está liberada '
+                    'no firewall.')
+    return {'nome': 'Porta de acesso', 'situacao': 'ok',
+            'resumo': f'O sistema atende na porta {atual}.',
+            'detalhe': detalhe}
 
 
 def diagnostico(uri, root_dir, agora=None):
@@ -358,7 +378,15 @@ def diagnostico(uri, root_dir, agora=None):
         verificar_disco(root_dir),
         verificar_pastas(root_dir),
     ]
-    rede = verificar_acesso_pela_rede()
+    # 🔴 A porta real, não a fixa: quem troca a porta no arquivo precisa do
+    # aviso sobre a porta QUE ESTÁ VALENDO. Conferir a 5001 enquanto o sistema
+    # atende na 8080 daria um alarme falso — ou, pior, um "está tudo certo"
+    # sobre uma porta que ninguém usa.
+    from app.configuracao import porta as _porta_configurada
+
+    instance_folder = os.path.join(root_dir, 'instance')
+    itens.append(verificar_porta(instance_folder))
+    rede = verificar_acesso_pela_rede(_porta_configurada(instance_folder))
     if rede:                       # None = não dá para perguntar; não inventa
         itens.append(rede)
     outro = verificar_outro_firewall()

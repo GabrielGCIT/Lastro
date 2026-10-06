@@ -14,7 +14,8 @@ debugger executa código Python enviado pelo navegador.
 """
 import os
 
-from app import ROOT_DIR, create_app
+from app import INSTANCE_FOLDER, ROOT_DIR, create_app
+from app.configuracao import garantir_arquivo, porta as porta_configurada
 from app.helpers import preparar_primeiro_acesso
 from app.registro import anunciar, configurar as configurar_log
 from app.startup import executar_startup
@@ -38,7 +39,9 @@ def anunciar_primeiro_acesso(porta):
 
 
 if __name__ == '__main__':
-    porta = int(os.environ.get('PORT', 5001))
+    # A porta sai de instance/configuracao.txt, que a atualização não toca.
+    arquivo_cfg = garantir_arquivo(INSTANCE_FOLDER)
+    porta = porta_configurada(INSTANCE_FOLDER)
 
     arquivo_log = configurar_log(app, ROOT_DIR)
     if arquivo_log:
@@ -65,6 +68,12 @@ if __name__ == '__main__':
         # e um deles esperando o outro terminar é fila na pista.
         from waitress import serve
         app.logger.info('Lastro iniciado na porta %s', porta)
+        if arquivo_cfg:
+            anunciar(f'[Lastro] Para trocar a porta: {arquivo_cfg}')
         anunciar(f'[Lastro] No ar na porta {porta}. Esta janela pode ficar aberta.')
-        serve(app, host='0.0.0.0', port=porta, threads=8,
-              ident='Lastro')
+        # 🔴 `listen` em vez de host/port: assim o servidor atende IPv4 E IPv6.
+        # Com só '0.0.0.0', o nome da máquina na rede não funciona — o Windows
+        # resolve o hostname para IPv6 primeiro, e o navegador recebia timeout
+        # tentando http://NOME-DO-SERVIDOR:porta. Pelo IP continuava abrindo, o
+        # que torna o sintoma confuso: "pelo número vai, pelo nome não".
+        serve(app, listen=f'*:{porta}', threads=8, ident='Lastro')

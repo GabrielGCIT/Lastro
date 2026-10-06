@@ -355,6 +355,23 @@ O QUE PRECISA TER NA MAQUINA
   Mais nada. Nenhum componente e baixado da internet: tudo que o sistema
   precisa esta na pasta "dependencias".
 
+COMO ACESSAR DE OUTRAS MAQUINAS
+  Pelo IP do servidor:     http://<ip-do-servidor>:5001
+  Ou pelo nome dele:       http://<nome-do-servidor>:5001
+  O nome funciona na rede local sem precisar configurar nada.
+
+  Se nao abrir em outro aparelho, confira nesta ordem:
+    1. o aparelho esta na mesma rede? (Wi-Fi da empresa, nao dados moveis)
+    2. a porta esta liberada no firewall? O instalar-servico.bat faz isso.
+    3. ha antivirus com firewall proprio? Precisa liberar nele tambem.
+  A tela "Saude do sistema", dentro do proprio Lastro, verifica os itens 2 e 3.
+
+TROCAR A PORTA
+  Edite  instance\configuracao.txt  e reinicie o sistema.
+  Ao trocar, libere a porta nova no firewall. A tela "Saude do sistema"
+  mostra qual porta esta valendo.
+  Este arquivo nao e substituido quando o sistema e atualizado.
+
 ONDE FICAM AS COISAS
   instance\\lastro.db   o banco de dados
   backups\\               copias automaticas, feitas todo dia as 3h
