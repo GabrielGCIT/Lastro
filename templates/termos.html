@@ -62,14 +62,22 @@
             }
         }, { root: caixa, threshold: 1.0 });
         observador.observe(fim);
-    } else {
-        // Navegador antigo: cai no cálculo de rolagem, com folga de 24px.
-        caixa.addEventListener('scroll', function () {
-            if (caixa.scrollTop + caixa.clientHeight >= caixa.scrollHeight - 24) {
-                liberar();
-            }
-        });
     }
+
+    // 🔴 O ouvinte de rolagem fica SEMPRE, não como alternativa para navegador
+    // antigo. Peguei esta tela travada: a caixa estava no fim (scrollTop +
+    // clientHeight == scrollHeight) e o observer não disparou — o marcador tem
+    // 1px e o threshold de 100% não tolera arredondamento de subpixel.
+    //
+    // O estrago aqui é pior que no modal: quem precisa reaceitar os termos (uma
+    // versão nova do texto) fica PRESO FORA do sistema, sem botão para clicar e
+    // sem nada explicando. Ter os dois caminhos custa nada, porque `liberar` é
+    // idempotente.
+    caixa.addEventListener('scroll', function () {
+        if (caixa.scrollTop + caixa.clientHeight >= caixa.scrollHeight - 24) {
+            liberar();
+        }
+    });
 
     // 🔴 Texto curto, ou tela alta: o fim já está visível e nunca haveria
     // rolagem. Sem isto o botão ficaria desabilitado para sempre e a pessoa

@@ -23,6 +23,11 @@
         <span class="badge bg-dark fs-6 px-3 py-2 font-monospace">
             {{ t('sobre.versao') }} {{ versao }}
         </span>
+        {% if empresa_da_instalacao %}
+        <div class="text-muted small mt-3">
+            {{ t('sobre.instalado_em') }} <strong>{{ empresa_da_instalacao }}</strong>
+        </div>
+        {% endif %}
     </div>
 </div>
 

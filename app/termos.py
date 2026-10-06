@@ -25,7 +25,7 @@ from app.sobre import AUTOR, NOME
 # 🔴 Mude isto SEMPRE que mudar o texto abaixo. Quem aceitou uma versão
 # anterior volta a ver a tela de aceite no próximo acesso — que é o
 # comportamento certo: ninguém concordou com um texto que não leu.
-VERSAO = '1.0'
+VERSAO = '1.1'
 
 TITULO = 'Termos de uso'
 
@@ -51,9 +51,10 @@ CLAUSULAS = [
     ),
     (
         '3. O uso que está autorizado',
-        'A empresa que recebeu este sistema pode instalá-lo e usá-lo em suas '
-        'operações, sem limite de prazo, de número de usuários ou de unidades. '
-        'O uso é gratuito.'
+        'A empresa que recebeu este sistema — identificada no cabeçalho e na '
+        'tela "Sobre o sistema" — pode instalá-lo e usá-lo em suas operações, '
+        'sem limite de prazo, de número de usuários ou de unidades. O uso é '
+        'gratuito.'
     ),
     (
         '4. O uso que não está autorizado',

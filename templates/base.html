@@ -705,6 +705,16 @@
             <a class="navbar-brand" href="{{ url_for('dashboard.index') }}">
                 <i class="fa-solid fa-boxes-stacked me-2 brand-icon"></i>Lastro
             </a>
+            {# O nome da empresa fica ao lado da marca do produto. Quem instala
+               informa no primeiro acesso, e a dica daquele campo promete que
+               aparece aqui -- promessa que o sistema nao cumpria. Alem de
+               cumprir, serve para quem opera: confirma, de relance, que esta
+               no sistema certo. Discreto de proposito: o produto e o Lastro. #}
+            {% if empresa_da_instalacao %}
+            <span class="d-none d-md-inline" style="color: rgba(255,255,255,0.45); font-size: 0.85rem;">
+                <span class="me-2">·</span>{{ empresa_da_instalacao }}
+            </span>
+            {% endif %}
 
             <div class="ms-auto d-flex align-items-center gap-2">
 

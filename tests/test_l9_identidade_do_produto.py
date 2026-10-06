@@ -117,3 +117,69 @@ def test_empresa_em_branco_nao_apaga_o_nome(app):
     criar_administrador('Joana', 'j@x.com', 'escolhida1', nome_empresa='   ')
 
     assert Empresa.query.order_by(Empresa.id).first().nome == antes
+
+
+# ---------------------------------------------------------------------------
+# O NOME DA EMPRESA NA TELA
+# ---------------------------------------------------------------------------
+
+def test_o_nome_da_empresa_aparece_no_cabecalho(app, cliente_logado, duas_empresas):
+    """🔴 A dica do campo PROMETE que aparece. Até aqui, não aparecia.
+
+    Perguntar o nome da empresa no primeiro acesso, guardar no banco e nunca
+    mostrar é pior que não perguntar: quem digitou fica procurando onde foi
+    parar, e a próxima coisa que faz é desconfiar do resto.
+    """
+    from app import db
+
+    du = duas_empresas
+    du.mb.nome = 'Logística Central Ltda'
+    db.session.commit()
+
+    html = cliente_logado(du.userA).get('/').get_data(as_text=True)
+
+    assert 'Logística Central Ltda' in html, 'o nome da empresa não chegou à tela'
+
+
+def test_a_pagina_sobre_identifica_a_instalacao(app, cliente_logado, duas_empresas):
+    """"De quem é esta instalação" é parte dos créditos, não enfeite.
+
+    🔴 Procura o RÓTULO, não só o nome: o nome da empresa aparece no cabeçalho
+    de toda página, inclusive desta. A primeira versão deste teste passava com o
+    bloco do Sobre removido — descobri sabotando. Um teste que o cabeçalho
+    satisfaz não está testando o Sobre.
+    """
+    import io as _io
+    import json as _json
+
+    from app import ROOT_DIR, db
+
+    du = duas_empresas
+    du.mb.nome = 'Logística Central Ltda'
+    db.session.commit()
+
+    with _io.open(f'{ROOT_DIR}/translations/pt.json', encoding='utf-8') as fh:
+        rotulo = _json.load(fh)['sobre.instalado_em']
+
+    html = cliente_logado(du.userA).get('/sobre').get_data(as_text=True)
+
+    assert rotulo in html, 'a página Sobre não diz de quem é a instalação'
+    # o rótulo e o nome, juntos, no mesmo trecho
+    pedaco = html[html.index(rotulo):html.index(rotulo) + 200]
+    assert 'Logística Central Ltda' in pedaco
+
+
+def test_a_dica_do_campo_nao_promete_o_que_nao_existe(app):
+    """🔴 A dica dizia que o nome aparece "nos documentos". O sistema não gera
+    documento nenhum — essa parte era promessa vazia, e promessa vazia na tela
+    de instalação é o primeiro motivo para alguém parar de ler as outras."""
+    import io
+    import json
+
+    from app import ROOT_DIR
+
+    with io.open(f'{ROOT_DIR}/translations/pt.json', encoding='utf-8') as fh:
+        dica = json.load(fh)['primeiro.empresa_dica']
+
+    assert 'documento' not in dica.lower(), f'promete o que não existe: {dica!r}'
+    assert 'cabeçalho' in dica.lower()

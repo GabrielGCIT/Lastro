@@ -350,7 +350,14 @@ def create_app(database_url=None):
         from app.ajuda import secao_da_tela
         from flask import request as _req
 
+        # Nome da empresa desta instalação, para o cabeçalho. Lido do banco
+        # porque é lá que quem instalou o gravou; cair em branco é melhor que
+        # mostrar o placeholder genérico para quem já se identificou.
+        from app.models import Empresa
+        _emp = Empresa.query.order_by(Empresa.id).first() if user_id else None
+
         return dict(
+            empresa_da_instalacao=(_emp.nome if _emp else None),
             ajuda_desta_tela=secao_da_tela(_req.endpoint),
             mapa_diagnostico=DIAGNOSTICO_MAPA,
             mapa_diagnostico_i18n=mapa_diagnostico_i18n,
