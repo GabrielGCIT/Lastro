@@ -14,6 +14,7 @@ Os dois testes que dão nome à fatia:
 import pytest
 
 from app import db
+from app.startup import NOME_EMPRESA
 from app.complementos import (BATERIAS_PADRAO, ComplementoRecusado,
                               disponivel_por_categoria, em_campo_por_categoria,
                               baterias_compativeis, sugerir_para_coletor)
@@ -27,7 +28,7 @@ from app.models import (CategoriaComplemento, EstoqueComplemento, ItemComplement
 def cenario(app, loc):
     """Balcão completo: catálogo, estoque, dois coletores e um colaborador."""
     from types import SimpleNamespace
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
 
     clim = CategoriaComplemento(empresa_id=mb.id, nome='BATERIA CLIMATIZADO',
                                 controle=COMPLEMENTO_QUANTIDADE,

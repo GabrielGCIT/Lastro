@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from app import db
+from app.startup import NOME_EMPRESA
 from app.complementos import (SITUACAO_ATRASADO, SITUACAO_FALTOU, SITUACAO_NO_PRAZO,
                               PRAZO_PADRAO_HORAS, disponivel_por_categoria,
                               em_campo_por_categoria, horas_fora, pendencias_abertas,
@@ -39,7 +40,7 @@ def cenario(app, loc):
     """Um CD com 10 baterias cadastradas, 1 headset, e nada em campo ainda."""
     from types import SimpleNamespace
 
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     bat = CategoriaComplemento(empresa_id=mb.id, nome='BATERIA',
                                controle=COMPLEMENTO_QUANTIDADE, e_bateria=True)
     hs_cat = CategoriaComplemento(empresa_id=mb.id, nome='HEADSET',

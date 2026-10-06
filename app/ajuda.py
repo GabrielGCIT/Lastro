@@ -303,7 +303,7 @@ SECOES = [
                     'Na pasta <b>backups</b>, escolha o arquivo da data '
                     'desejada — o nome traz data e hora.',
                     'Copie-o para a pasta <b>instance</b>, substituindo o '
-                    '<b>mbassets.db</b>.',
+                    '<b>lastro.db</b>.',
                     'Inicie o sistema de novo.',
                 ],
                 'problemas': [

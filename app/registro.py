@@ -9,7 +9,7 @@ só aparece horas depois, ou nunca, se o processo for encerrado antes. O sintoma
 é um arquivo de log VAZIO justamente no dia em que alguém foi procurar o motivo
 de algo ter parado.
 
-Aqui o log vai para `logs/mbassets.log`, com rotação por tamanho. Rotação
+Aqui o log vai para `logs/lastro.log`, com rotação por tamanho. Rotação
 importa porque este sistema deve rodar anos sem ninguém olhar: sem ela, o
 arquivo cresce até ocupar o disco, e o primeiro sintoma seria o sistema parando
 de gravar movimentação — um problema muito pior que o original.
@@ -39,7 +39,7 @@ def configurar(app, root_dir):
     sem log é ruim, não subir é pior, e a tela de saúde avisa sobre a pasta.
     """
     pasta = pasta_de_logs(root_dir)
-    caminho = os.path.join(pasta, 'mbassets.log')
+    caminho = os.path.join(pasta, 'lastro.log')
 
     # Chamada repetida (reload do Werkzeug, teste) não pode empilhar handlers:
     # cada um escreveria a mesma linha de novo no arquivo.

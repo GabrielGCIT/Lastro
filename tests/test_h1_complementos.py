@@ -14,6 +14,7 @@ climatizado) e, solta na cabeça do operador, vira bateria morrendo no congelado
 import pytest
 
 from app import db
+from app.startup import NOME_EMPRESA
 from app.models import (CategoriaComplemento, ItemComplementar, EstoqueComplemento,
                         MovimentacaoComplemento, Movimentacao, Coletor, Empresa,
                         COMPLEMENTO_QUANTIDADE, COMPLEMENTO_UNIDADE,
@@ -22,7 +23,7 @@ from app.models import (CategoriaComplemento, ItemComplementar, EstoqueComplemen
 
 @pytest.fixture()
 def mb(app):
-    return Empresa.query.filter_by(nome='Martin Brower').first()
+    return Empresa.query.filter_by(nome=NOME_EMPRESA).first()
 
 
 @pytest.fixture()

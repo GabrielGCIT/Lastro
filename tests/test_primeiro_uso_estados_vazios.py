@@ -20,6 +20,7 @@ import pytest
 from werkzeug.security import generate_password_hash
 
 from app import db
+from app.startup import NOME_EMPRESA
 from app.models import Coletor, Empresa, Grupo, Localidade, Usuario
 
 
@@ -30,7 +31,7 @@ def usuario_sem_localidade(app, loc):
     Não é cenário exótico: o formulário de usuário deixa a localidade em branco,
     e o nível CD é o padrão de quem trabalha no balcão.
     """
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     ti = Grupo.query.filter_by(nome='TI').first()
     u = Usuario(nome='Recém-criado', re='9900', email='novo@mb.com',
                 senha_hash=generate_password_hash('x', method='scrypt'),
@@ -134,7 +135,7 @@ def test_o_motivo_da_trava_coletor_orfao_e_invisivel(app, admin_client, loc,
     do_admin = admin_client.get('/coletores').get_data(as_text=True)
     assert 'SN-FANTASMA' not in do_admin, 'coletor sem CD apareceu para o admin'
 
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     global_mb = Usuario.query.filter_by(re='9900').first()
     global_mb.nivel_acesso = 'GLOBAL'
     global_mb.empresa_id = mb.id

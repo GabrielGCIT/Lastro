@@ -654,15 +654,21 @@ def token_primeiro_acesso_confere(token) -> bool:
     return bool(esperado) and hmac.compare_digest(esperado, token)
 
 
-def criar_administrador(nome, email, senha, re='admin'):
+def criar_administrador(nome, email, senha, re='admin', nome_empresa=None):
     """Cria o primeiro usuário: perfil TI, nível GLOBAL, na empresa da instalação.
 
     A senha foi escolhida pelo próprio dono, então NÃO é provisória. Consome o
     token do primeiro acesso.
+
+    `nome_empresa` renomeia a empresa criada no boot. O produto nasce com um
+    nome genérico de propósito — quem instala diz o nome de verdade aqui, e ele
+    aparece nos termos, no cabeçalho e nos documentos. Em branco, fica como está.
     """
     from app.models import Usuario, Grupo, Empresa
     from app.startup import PERFIL_ADMIN
     empresa = Empresa.query.order_by(Empresa.id).first()
+    if nome_empresa and nome_empresa.strip():
+        empresa.nome = nome_empresa.strip()
     perfil = Grupo.query.filter_by(nome=PERFIL_ADMIN, empresa_id=empresa.id).first()
     admin = Usuario(
         nome=nome, re=re, email=normalizar_email(email),

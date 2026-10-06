@@ -138,8 +138,8 @@ def test_retencao_usa_a_DATA_DO_NOME_e_nao_o_mtime(tmp_path):
     """
     pasta = tmp_path / 'backups'
     pasta.mkdir()
-    antigo = pasta / 'mbassets-20260101-0300.db'
-    novo = pasta / 'mbassets-20261005-0300.db'
+    antigo = pasta / 'lastro-20260101-0300.db'
+    novo = pasta / 'lastro-20261005-0300.db'
     for f in (antigo, novo):
         f.write_bytes(b'x')
         # mtime de AGORA nos dois: pelo mtime, nenhum seria apagado.
@@ -148,7 +148,7 @@ def test_retencao_usa_a_DATA_DO_NOME_e_nao_o_mtime(tmp_path):
     apagados = limpar_antigos(str(pasta), dias=30,
                               agora=datetime(2026, 10, 5, 12, 0))
 
-    assert apagados == ['mbassets-20260101-0300.db']
+    assert apagados == ['lastro-20260101-0300.db']
     assert novo.exists(), 'apagou o backup recente'
 
 
@@ -157,7 +157,7 @@ def test_arquivo_estranho_na_pasta_e_poupado(tmp_path):
     pasta = tmp_path / 'backups'
     pasta.mkdir()
     (pasta / 'anotacoes-do-analista.txt').write_text('nao me apague')
-    (pasta / 'mbassets-20260101-0300.db').write_bytes(b'x')
+    (pasta / 'lastro-20260101-0300.db').write_bytes(b'x')
 
     limpar_antigos(str(pasta), dias=1, agora=datetime(2026, 10, 5))
 

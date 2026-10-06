@@ -10,7 +10,7 @@ from werkzeug.security import generate_password_hash
 from app import db
 from app.models import Usuario, Empresa, Grupo
 
-ADMIN_EMAIL = 'admin@mbassets.local'
+ADMIN_EMAIL = 'admin@lastro.local'
 ADMIN_SENHA = 'admin123'
 
 
@@ -49,7 +49,7 @@ def test_sessao_carrega_empresa_id(client):
 
 
 def test_login_email_case_insensitive_e_com_espacos(client):
-    resp = _login(client, '  Admin@MBASSETS.Local  ', ADMIN_SENHA)
+    resp = _login(client, '  Admin@LASTRO.Local  ', ADMIN_SENHA)
     assert resp.status_code == 302
 
 

@@ -1,6 +1,6 @@
 """A fronteira do produto: o que NÃO pode existir neste repositório.
 
-O MBAssets é entregue em código-fonte (Python roda em texto), então o que ele
+O Lastro é entregue em código-fonte (Python roda em texto), então o que ele
 não contém é tão parte do produto quanto o que contém. Este teste varre cada
 arquivo de texto do repositório atrás de nomes de módulos que ficaram de fora e
 de marcas que não pertencem a ele.

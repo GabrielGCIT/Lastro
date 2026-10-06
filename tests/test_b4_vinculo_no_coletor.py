@@ -17,6 +17,7 @@ manutenção e outro assume.
 import pytest
 
 from app import db
+from app.startup import NOME_EMPRESA
 from app.complementos import pecas_do_coletor, pecas_para_vincular
 from app.models import (CategoriaComplemento, Coletor, Empresa, ItemComplementar,
                         Localidade, COMPLEMENTO_QUANTIDADE, COMPLEMENTO_UNIDADE,
@@ -28,7 +29,7 @@ def cena(app, loc):
     """Dois coletores no mesmo CD, um headset pareado com o primeiro."""
     from types import SimpleNamespace
 
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     hs_cat = CategoriaComplemento(empresa_id=mb.id, nome='HEADSET',
                                   controle=COMPLEMENTO_UNIDADE)
     db.session.add(hs_cat)

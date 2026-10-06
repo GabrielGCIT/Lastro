@@ -24,6 +24,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from app import db
+from app.startup import NOME_EMPRESA
 from app.complementos import rastreio_itens
 from app.models import (CategoriaComplemento, Coletor, Colaborador, Empresa,
                         ItemComplementar, Movimentacao, MovimentacaoComplemento,
@@ -39,7 +40,7 @@ def inventario(app, loc):
     """Um CD com dois headsets: um na prateleira, um ainda sem CD definido."""
     from types import SimpleNamespace
 
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     hs_cat = CategoriaComplemento(empresa_id=mb.id, nome='HEADSET',
                                   controle=COMPLEMENTO_UNIDADE)
     bat_cat = CategoriaComplemento(empresa_id=mb.id, nome='BATERIA SECO',

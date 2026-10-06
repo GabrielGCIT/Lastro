@@ -13,6 +13,7 @@ do balcão. A coluna é trivial; o backfill é que carrega o risco.
 import pytest
 
 from app import db
+from app.startup import NOME_EMPRESA
 from app.complementos import baterias_compativeis, rastreio_quantidades
 from app.models import (CategoriaComplemento, Coletor, Empresa,
                         COMPLEMENTO_QUANTIDADE, COMPLEMENTO_UNIDADE,
@@ -24,7 +25,7 @@ def catalogo(app, loc):
     """Bateria, um contado que NÃO é bateria, e um por unidade."""
     from types import SimpleNamespace
 
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     bateria = CategoriaComplemento(empresa_id=mb.id, nome='BATERIA SECO',
                                    controle=COMPLEMENTO_QUANTIDADE,
                                    camara_atendida=COMPLEMENTO_CAMARA_SECO,

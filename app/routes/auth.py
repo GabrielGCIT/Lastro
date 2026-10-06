@@ -47,7 +47,7 @@ BLOQUEIO_LOGIN_MIN    = 15
 # Hash de sacrifício conferido quando o e-mail não existe: iguala o tempo de
 # resposta ao de uma senha errada em conta real, fechando o timing-oracle que
 # permitiria enumerar quais e-mails têm cadastro.
-_DUMMY_HASH = generate_password_hash('mbassets-timing-equalizer', method='scrypt')
+_DUMMY_HASH = generate_password_hash('lastro-timing-equalizer', method='scrypt')
 
 
 def _buscar_por_email(email: str):
@@ -232,7 +232,8 @@ def primeiro_acesso(token):
             return render_template('primeiro_acesso.html', token=token,
                                    senha_minima=SENHA_MINIMA, t_mod=_termos)
 
-        admin = criar_administrador(nome, email, senha)
+        admin = criar_administrador(nome, email, senha,
+                                    nome_empresa=request.form.get('empresa'))
         # Mesma transação da criação: se fossem dois passos, uma queda entre
         # eles deixaria o administrador existindo sem aceite nenhum.
         _termos.registrar_aceite(admin)

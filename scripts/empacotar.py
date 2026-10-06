@@ -102,10 +102,10 @@ def _escrever_instalador(destino, versao):
     conteudo = f'''@echo off
 setlocal
 chcp 65001 >nul
-title MBAssets {versao} - Instalacao
+title Lastro {versao} - Instalacao
 
 echo ==========================================================
-echo   MBAssets {versao} - instalacao
+echo   Lastro {versao} - instalacao
 echo ==========================================================
 echo.
 
@@ -162,7 +162,7 @@ def _escrever_iniciar(destino):
     conteudo = '''@echo off
 setlocal
 chcp 65001 >nul
-title MBAssets - em execucao
+title Lastro - em execucao
 
 if not exist "%~dp0venv\\Scripts\\python.exe" (
     echo [ERRO] O sistema ainda nao foi instalado nesta pasta.
@@ -192,7 +192,7 @@ def _escrever_servico_run(destino):
     sozinho com %~dp0.
     """
     conteudo = '''@echo off
-rem Executado pela Tarefa Agendada "MBAssets" quando o servidor liga.
+rem Executado pela Tarefa Agendada "Lastro" quando o servidor liga.
 rem Para iniciar o sistema na mao, use o iniciar.bat.
 cd /d "%~dp0"
 "%~dp0venv\\Scripts\\python.exe" "%~dp0run.py"
@@ -216,7 +216,7 @@ def _escrever_servico(destino, versao):
     conteudo = f'''@echo off
 setlocal
 chcp 65001 >nul
-title MBAssets {versao} - iniciar junto com o Windows
+title Lastro {versao} - iniciar junto com o Windows
 
 net session >nul 2>&1
 if errorlevel 1 (
@@ -226,8 +226,8 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo Registrando o MBAssets para iniciar junto com o Windows...
-schtasks /Create /TN "MBAssets" /SC ONSTART /RU "SYSTEM" /RL HIGHEST /F ^
+echo Registrando o Lastro para iniciar junto com o Windows...
+schtasks /Create /TN "Lastro" /SC ONSTART /RU "SYSTEM" /RL HIGHEST /F ^
     /TR "%~dp0servico-run.bat"
 if errorlevel 1 (
     echo [ERRO] Nao consegui registrar. Confira se a politica da maquina
@@ -237,9 +237,9 @@ if errorlevel 1 (
 )
 
 echo.
-echo Pronto. O MBAssets vai subir sozinho toda vez que o servidor ligar.
-echo Para iniciar agora sem reiniciar:  schtasks /Run /TN "MBAssets"
-echo Para desfazer:                     schtasks /Delete /TN "MBAssets" /F
+echo Pronto. O Lastro vai subir sozinho toda vez que o servidor ligar.
+echo Para iniciar agora sem reiniciar:  schtasks /Run /TN "Lastro"
+echo Para desfazer:                     schtasks /Delete /TN "Lastro" /F
 echo.
 pause
 '''
@@ -257,7 +257,7 @@ def _escrever_atualizar(destino, versao):
     conteudo = f'''@echo off
 setlocal
 chcp 65001 >nul
-title MBAssets - atualizar para a versao {versao}
+title Lastro - atualizar para a versao {versao}
 
 rem Rode este arquivo de DENTRO da pasta nova, apontando para a instalacao atual.
 if "%~1"=="" (
@@ -271,7 +271,7 @@ if "%~1"=="" (
 
 set "ALVO=%~1"
 if not exist "%ALVO%\\run.py" (
-    echo [ERRO] Nao encontrei uma instalacao do MBAssets em:
+    echo [ERRO] Nao encontrei uma instalacao do Lastro em:
     echo    %ALVO%
     pause
     exit /b 1
@@ -305,8 +305,8 @@ echo.
 echo ==========================================================
 echo   Atualizado para a versao {versao}.
 echo.
-echo   Reinicie o sistema:  schtasks /End /TN "MBAssets"
-echo                        schtasks /Run /TN "MBAssets"
+echo   Reinicie o sistema:  schtasks /End /TN "Lastro"
+echo                        schtasks /Run /TN "Lastro"
 echo.
 echo   Confira a versao na tela "Saude do sistema".
 echo   Deu errado? A versao anterior esta em:
@@ -319,7 +319,7 @@ pause
 
 
 def _escrever_leiame(destino, versao):
-    conteudo = f'''MBAssets {versao}
+    conteudo = f'''Lastro {versao}
 Controle de coletores do CD
 
 COMO INSTALAR
@@ -338,7 +338,7 @@ O QUE PRECISA TER NA MAQUINA
   precisa esta na pasta "dependencias".
 
 ONDE FICAM AS COISAS
-  instance\\mbassets.db   o banco de dados
+  instance\\lastro.db   o banco de dados
   backups\\               copias automaticas, feitas todo dia as 3h
   uploads\\               fotos
   logs\\                  registro de eventos
@@ -364,7 +364,7 @@ def _gravar(caminho, conteudo):
 
 
 def _zipar(pasta, versao):
-    destino = os.path.join(RAIZ, 'dist', f'MBAssets-{versao}.zip')
+    destino = os.path.join(RAIZ, 'dist', f'Lastro-{versao}.zip')
     with zipfile.ZipFile(destino, 'w', zipfile.ZIP_DEFLATED) as zf:
         for raiz_atual, _dirs, arquivos in os.walk(pasta):
             for nome in arquivos:
@@ -381,8 +381,8 @@ def main():
     args = p.parse_args()
 
     versao = _versao()
-    pasta = os.path.join(RAIZ, 'dist', f'MBAssets-{versao}')
-    print(f'Montando o MBAssets {versao}...')
+    pasta = os.path.join(RAIZ, 'dist', f'Lastro-{versao}')
+    print(f'Montando o Lastro {versao}...')
 
     _limpar(pasta)
     whls = _baixar_dependencias(pasta)

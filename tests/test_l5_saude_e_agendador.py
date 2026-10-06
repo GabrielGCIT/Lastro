@@ -65,9 +65,9 @@ def test_a_thread_nao_sobe_durante_os_testes(app):
 @pytest.fixture()
 def instalacao(tmp_path):
     """Uma raiz com banco, como a instalação de verdade."""
-    root = tmp_path / 'mbassets'
+    root = tmp_path / 'lastro'
     (root / 'instance').mkdir(parents=True)
-    banco = root / 'instance' / 'mbassets.db'
+    banco = root / 'instance' / 'lastro.db'
     con = sqlite3.connect(str(banco))
     con.execute('PRAGMA journal_mode=WAL')
     con.execute('CREATE TABLE coletores (id INTEGER PRIMARY KEY)')
@@ -86,7 +86,7 @@ def test_rodar_uma_vez_copia_e_limpa(instalacao):
     caminho, apagados = rodar_uma_vez(uri, root, agora=hoje)
 
     assert os.path.exists(caminho)
-    assert apagados == ['mbassets-20260101-0300.db'], \
+    assert apagados == ['lastro-20260101-0300.db'], \
         'a cópia de janeiro devia ter sido limpa'
 
 

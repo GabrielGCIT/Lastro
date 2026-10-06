@@ -13,6 +13,7 @@ import pytest
 from werkzeug.security import generate_password_hash
 
 from app import db
+from app.startup import NOME_EMPRESA
 from app.models import (
     Empresa, Localidade, Usuario, Grupo, Colaborador, Coletor,
 )
@@ -39,7 +40,7 @@ def _cliente_logado(app, user):
 @pytest.fixture()
 def cen(app):
     """MB (A) + Acme (B) com registros só na Acme para provar o vazamento de leitura."""
-    mb   = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb   = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     acme = Empresa(nome='Acme Logística')
     db.session.add(acme)
     db.session.flush()

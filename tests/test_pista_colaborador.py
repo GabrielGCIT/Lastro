@@ -5,6 +5,7 @@ Estes testes batem direto no POST, que é também a superfície exposta a quem
 ignora o JS da tela.
 """
 from app import db
+from app.startup import NOME_EMPRESA
 from app.models import Coletor, Colaborador, Movimentacao
 
 
@@ -31,7 +32,7 @@ def _colaborador(re='9001', nome='Maria Souza', **kwargs):
     # colaborador órfão não seria visto pela sessão MB e falsearia o cenário.
     if 'empresa_id' not in kwargs:
         from app.models import Empresa
-        mb = Empresa.query.filter_by(nome='Martin Brower').first()
+        mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
         kwargs['empresa_id'] = mb.id if mb else None
     c = Colaborador(re=re, nome=nome, **kwargs)
     db.session.add(c)

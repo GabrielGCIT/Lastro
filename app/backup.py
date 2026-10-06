@@ -4,7 +4,7 @@ Backup do banco — uma cópia consistente, verificada, sem parar o sistema.
 🔴 Por que NÃO é um copiar-e-colar do arquivo:
 
 O banco roda em modo WAL (write-ahead log). As transações recentes vivem no
-`mbassets.db-wal`, não no `.db`, até o próximo checkpoint. Copiar só o `.db` com
+`lastro.db-wal`, não no `.db`, até o próximo checkpoint. Copiar só o `.db` com
 o sistema no ar devolve um arquivo que ABRE, que parece certo, e que está sem as
 últimas movimentações — ou pior, pego no meio de uma escrita. Um backup que
 mente é mais perigoso que backup nenhum: ninguém confere o que acredita ter.
@@ -26,8 +26,8 @@ from datetime import datetime, timedelta
 # passada" sem encher o disco de um servidor que ninguém monitora.
 RETENCAO_DIAS = 30
 
-# mbassets-20261005-2230.db — data e hora no nome, ordenável por nome.
-PADRAO_NOME = re.compile(r'^mbassets-(\d{8})-(\d{4})\.db$')
+# lastro-20261005-2230.db — data e hora no nome, ordenável por nome.
+PADRAO_NOME = re.compile(r'^lastro-(\d{8})-(\d{4})\.db$')
 
 
 class BackupFalhou(Exception):
@@ -81,7 +81,7 @@ def fazer_backup(uri, pasta_destino, agora=None):
     agora = agora or datetime.now()
     os.makedirs(pasta_destino, exist_ok=True)
     destino = os.path.join(pasta_destino,
-                           f'mbassets-{agora:%Y%m%d}-{agora:%H%M}.db')
+                           f'lastro-{agora:%Y%m%d}-{agora:%H%M}.db')
 
     try:
         com_origem = sqlite3.connect(f'file:{origem}?mode=ro', uri=True)

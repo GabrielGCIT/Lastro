@@ -4,7 +4,7 @@ O que entra — e o que nunca pode entrar — no pacote entregue.
 🔴 Este arquivo existe por causa da fronteira entre os dois produtos.
 
 O pacote é a única coisa que sai daqui. Um arquivo a mais nele é um arquivo que
-a Martin Brower passa a ter, para sempre, sem que ninguém perceba: o histórico
+quem recebe o produto passa a ter, para sempre, sem ninguém perceber: o histórico
 do Git carregaria todo o desenvolvimento; `instance/` levaria o banco de quem
 desenvolveu; `tests/` levaria os cenários, com nomes e REs de exemplo.
 
@@ -25,6 +25,7 @@ import os
 import pytest
 
 from app import ROOT_DIR
+from app.startup import NOME_EMPRESA
 
 _spec = importlib.util.spec_from_file_location(
     'empacotar', os.path.join(ROOT_DIR, 'scripts', 'empacotar.py'))
@@ -93,7 +94,7 @@ def pacote(tmp_path, sujeira_plantada):
 
     O download é lento, precisa de rede e não é o que este arquivo defende.
     """
-    destino = str(tmp_path / 'MBAssets-teste')
+    destino = str(tmp_path / 'Lastro-teste')
     os.makedirs(destino)
     empacotar._copiar(destino)
     empacotar._escrever_instalador(destino, '9.9.9')
@@ -236,7 +237,7 @@ def test_o_comando_do_servico_cabe_no_limite_do_windows(pacote):
 
     pasta_funda = os.path.join(
         r'C:\Users\nome.sobrenome\Documents', 'Sistemas Internos',
-        'Controle de Coletores', 'MBAssets-1.0.0')
+        'Controle de Coletores', 'Lastro-1.0.0')
     comando = os.path.join(pasta_funda, 'servico-run.bat')
     assert len(comando) < 261, f'{len(comando)} caracteres no pior caso'
 

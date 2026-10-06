@@ -11,7 +11,7 @@ Serve a três leitores diferentes, e é por isso que ela tem seções distintas:
     pronta é a diferença entre uma conversa de cinco minutos e um processo de
     aprovação.
 
-🔴 A seção de autoria não é formalidade. O MBAssets é obra de uma pessoa, cedida
+🔴 A seção de autoria não é formalidade. O Lastro é obra de uma pessoa, cedida
 para uso de uma empresa — e as duas coisas precisam estar escritas no próprio
 sistema, não só num contrato que ninguém abre. Software sem autoria declarada
 vira, com o tempo, software de quem o estiver usando.
@@ -25,7 +25,7 @@ incluído. Numa disputa de verdade, quem decide é um advogado.
 # IDENTIFICAÇÃO
 # --------------------------------------------------------------------------
 
-NOME = 'MBAssets'
+NOME = 'Lastro'
 DESCRICAO_CURTA = 'Controle de coletores de centro de distribuição'
 
 PROPOSITO = (

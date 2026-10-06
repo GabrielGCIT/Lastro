@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from app import db
+from app.startup import NOME_EMPRESA
 from app.complementos import painel_baterias
 from app.models import (CategoriaComplemento, Coletor, Colaborador, Empresa,
                         EstoqueComplemento, Localidade, Movimentacao,
@@ -28,7 +29,7 @@ def cenario(app, loc):
     """GR com 40 comuns e 20 climatizadas; OS cadastrado e vazio."""
     from types import SimpleNamespace
 
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     vazio = Localidade(sigla='OS', nome='Osasco', empresa_id=mb.id)
     db.session.add(vazio)
 

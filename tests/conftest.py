@@ -13,13 +13,13 @@ os.environ['SECRET_KEY']   = 'test-secret'
 
 # Senha do administrador criado em cada teste (o boot não cria usuário: em
 # produção o admin nasce no primeiro acesso, com a senha que quem instala escolhe).
-ADMIN_EMAIL = 'admin@mbassets.local'
+ADMIN_EMAIL = 'admin@lastro.local'
 ADMIN_SENHA = 'admin123'
 
 import pytest  # noqa: E402
 
 from app import create_app, db          # noqa: E402
-from app.startup import executar_startup  # noqa: E402
+from app.startup import NOME_EMPRESA, executar_startup  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -94,7 +94,7 @@ def loc(app):
     boot, antes desta criação.
     """
     from app.models import Localidade, Empresa
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     localidade = Localidade(sigla='GR', nome='Guarulhos',
                             empresa_id=mb.id if mb else None)
     db.session.add(localidade)
@@ -147,7 +147,7 @@ def duas_empresas(app):
     from werkzeug.security import generate_password_hash
     from app.models import Empresa, Localidade, Usuario, Grupo, Colaborador
 
-    mb   = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb   = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     acme = Empresa(nome='Acme Logística')
     db.session.add(acme)
     db.session.flush()

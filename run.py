@@ -1,14 +1,14 @@
 """
-Entrypoint do MBAssets.
+Entrypoint do Lastro.
 Uso: python run.py
 
-Sobe sem nenhuma variável de ambiente: o banco nasce em instance/mbassets.db e
+Sobe sem nenhuma variável de ambiente: o banco nasce em instance/lastro.db e
 a SECRET_KEY é gerada e guardada em instance/secret_key no primeiro boot.
 
 Enquanto a instalação não tem usuário, o boot imprime o endereço de primeiro
 acesso — é por ele que se cria o administrador.
 
-MBASSETS_DEBUG=1 liga o modo de desenvolvimento (recarga automática e o
+LASTRO_DEBUG=1 liga o modo de desenvolvimento (recarga automática e o
 debugger do Werkzeug). Nunca ligue isso numa máquina que a rede alcança: o
 debugger executa código Python enviado pelo navegador.
 """
@@ -42,9 +42,9 @@ if __name__ == '__main__':
 
     arquivo_log = configurar_log(app, ROOT_DIR)
     if arquivo_log:
-        anunciar(f'[MBAssets] Registro de eventos em {arquivo_log}')
+        anunciar(f'[Lastro] Registro de eventos em {arquivo_log}')
     else:
-        anunciar('[MBAssets] AVISO: nao consegui gravar o arquivo de log. '
+        anunciar('[Lastro] AVISO: nao consegui gravar o arquivo de log. '
                  'O sistema sobe assim mesmo; veja a tela de Saude do sistema.')
 
     with app.app_context():
@@ -55,7 +55,7 @@ if __name__ == '__main__':
     from app.agendador import iniciar as iniciar_backup
     iniciar_backup(app)
 
-    if os.environ.get('MBASSETS_DEBUG') == '1':
+    if os.environ.get('LASTRO_DEBUG') == '1':
         # Só para desenvolver: recarga automática e o debugger do Werkzeug.
         app.run(debug=True, host='0.0.0.0', port=porta)
     else:
@@ -64,7 +64,7 @@ if __name__ == '__main__':
         # usá-lo em produção. No balcão há vários postos bipando ao mesmo tempo,
         # e um deles esperando o outro terminar é fila na pista.
         from waitress import serve
-        app.logger.info('MBAssets iniciado na porta %s', porta)
-        anunciar(f'[MBAssets] No ar na porta {porta}. Esta janela pode ficar aberta.')
+        app.logger.info('Lastro iniciado na porta %s', porta)
+        anunciar(f'[Lastro] No ar na porta {porta}. Esta janela pode ficar aberta.')
         serve(app, host='0.0.0.0', port=porta, threads=8,
-              ident='MBAssets')
+              ident='Lastro')

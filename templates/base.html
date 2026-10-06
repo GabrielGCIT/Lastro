@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{% block title %}Dashboard{% endblock %} | MBAssets</title>
+    <title>{% block title %}Dashboard{% endblock %} | Lastro</title>
 
     <!--
         Anti-flash: define o tema ANTES de qualquer CSS carregar.
@@ -703,7 +703,7 @@
             </button>
 
             <a class="navbar-brand" href="{{ url_for('dashboard.index') }}">
-                <i class="fa-solid fa-boxes-stacked me-2 brand-icon"></i>MBAssets
+                <i class="fa-solid fa-boxes-stacked me-2 brand-icon"></i>Lastro
             </a>
 
             <div class="ms-auto d-flex align-items-center gap-2">
@@ -967,7 +967,7 @@
                     </div>
                     {% block sidebar_version %}
                     <div class="sidebar-footer-version">
-                        MBAssets
+                        Lastro
                     </div>
                     {% endblock sidebar_version %}
                 </div>

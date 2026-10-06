@@ -14,6 +14,7 @@ que a tornava a opção pré-selecionada.
 import pytest
 
 from app import db
+from app.startup import NOME_EMPRESA
 from app.complementos import baterias_compativeis
 from app.models import (CategoriaComplemento, Coletor, Empresa,
                         COMPLEMENTO_QUANTIDADE, COMPLEMENTO_CAMARA_SECO,
@@ -25,7 +26,7 @@ from app.models import (CategoriaComplemento, Coletor, Empresa,
 def catalogo(app, loc):
     """As três baterias do cenário real: duas de coletor, uma de headset."""
     from types import SimpleNamespace
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
 
     def tipo(nome, camara, equipamento):
         c = CategoriaComplemento(empresa_id=mb.id, nome=nome,
@@ -76,9 +77,9 @@ def test_tipo_antigo_sem_a_coluna_continua_de_coletor(app, loc):
 
     Todo tipo cadastrado antes desta coluna tem `equipamento` nulo. Se NULL
     fosse tratado como "outro equipamento", o balcão pararia de oferecer bateria
-    em toda base que já existe — inclusive a da Martin Brower, em produção.
+    em toda base que já existe, inclusive as que estiverem em produção.
     """
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     antiga = CategoriaComplemento(empresa_id=mb.id, nome='BATERIA ANTIGA',
                                   controle=COMPLEMENTO_QUANTIDADE,
                                   e_bateria=True, equipamento=None)

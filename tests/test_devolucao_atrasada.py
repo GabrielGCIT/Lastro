@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from app import db
+from app.startup import NOME_EMPRESA
 from app.complementos import (ComplementoRecusado, disponivel_por_categoria,
                               pendencias_abertas, registrar_devolucao_atrasada)
 from app.models import (CategoriaComplemento, Colaborador, Coletor, Empresa,
@@ -29,7 +30,7 @@ from app.models import (CategoriaComplemento, Colaborador, Coletor, Empresa,
 def falta(app, loc):
     """Um coletor que JÁ VOLTOU e uma bateria que não voltou com ele."""
     from types import SimpleNamespace
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
 
     cat = CategoriaComplemento(empresa_id=mb.id, nome='BATERIA PADRAO',
                                controle=COMPLEMENTO_QUANTIDADE, e_bateria=True)

@@ -6,6 +6,16 @@
 
 <form action="{{ url_for('auth.primeiro_acesso', token=token) }}" method="POST">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {# O produto nasce com um nome de empresa generico; quem instala diz o de
+       verdade aqui. Primeiro campo porque e a pergunta mais facil da tela, e
+       porque o nome aparece nos termos que a pessoa vai ler em seguida. #}
+    <div class="mb-3">
+        <label class="form-label" for="empresa">{{ t('primeiro.empresa') }}</label>
+        <input type="text" class="form-control" id="empresa" name="empresa" maxlength="120"
+               value="{{ request.form.get('empresa', '') }}" required
+               placeholder="{{ t('primeiro.empresa_exemplo') }}">
+        <div class="form-text">{{ t('primeiro.empresa_dica') }}</div>
+    </div>
     <div class="mb-3">
         <label class="form-label" for="nome">{{ t('label.nome') }}</label>
         <input type="text" class="form-control" id="nome" name="nome" maxlength="100"

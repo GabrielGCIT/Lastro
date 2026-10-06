@@ -18,7 +18,7 @@ from app.registro import ARQUIVOS_GUARDADOS, TAMANHO_MAXIMO, configurar
 
 class _AppFalso:
     def __init__(self):
-        self.logger = logging.getLogger(f'mbassets-teste-{id(self)}')
+        self.logger = logging.getLogger(f'lastro-teste-{id(self)}')
         self.logger.handlers = []
 
 

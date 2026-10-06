@@ -17,6 +17,7 @@ erro no log e sem nada de vermelho na suíte.
 from werkzeug.security import generate_password_hash
 
 from app import db
+from app.startup import NOME_EMPRESA
 from app.models import Empresa, Grupo, Usuario
 
 
@@ -32,7 +33,7 @@ def _usuario(nome, re, nivel, empresa, grupo, localidade_id=None):
 
 def test_global_ve_o_cd_no_seletor(app, cliente_logado, loc):
     """🔴 O nome do arquivo: a barra tem de trazer o CD, não só a casca."""
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     ti = Grupo.query.filter_by(nome='TI', empresa_id=mb.id).first()
     c = cliente_logado(_usuario('Gestor', '9001', 'GLOBAL', mb, ti))
 
@@ -49,7 +50,7 @@ def test_cd_nao_ve_a_barra(app, cliente_logado, loc):
     Um seletor de uma opção só é pior que nenhum — convida ao clique e não faz
     nada.
     """
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     ti = Grupo.query.filter_by(nome='TI', empresa_id=mb.id).first()
     c = cliente_logado(_usuario('Operador', '9002', 'CD', mb, ti, loc.id))
 

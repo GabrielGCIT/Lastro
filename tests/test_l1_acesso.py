@@ -309,7 +309,7 @@ def test_terminal_redefine_a_senha_do_ultimo_ti(app, capsys):
     admin.login_bloqueado_ate = __import__('datetime').datetime.now()
     db.session.commit()
 
-    assert manage.redefinir_senha('ADMIN@mbassets.local') == 0
+    assert manage.redefinir_senha('ADMIN@lastro.local') == 0
 
     provisoria = capsys.readouterr().out.split(': ', 1)[1].split()[0]
     db.session.refresh(admin)

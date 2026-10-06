@@ -13,11 +13,11 @@ from app import db
 from app.models import (
     Empresa, Usuario, Colaborador, Grupo, Localidade,
 )
-from app.startup import seed_empresa, _TABELAS_EMPRESA
+from app.startup import NOME_EMPRESA, seed_empresa, _TABELAS_EMPRESA
 
 
 def _empresa_mb():
-    return Empresa.query.filter_by(nome='Martin Brower').first()
+    return Empresa.query.filter_by(nome=NOME_EMPRESA).first()
 
 
 def _nova_empresa(nome='Acme Logística'):
@@ -131,7 +131,7 @@ def test_sigla_do_cd_unica_dentro_da_empresa(app):
 
 
 def test_nome_empresa_unico(app):
-    db.session.add(Empresa(nome='Martin Brower'))
+    db.session.add(Empresa(nome=NOME_EMPRESA))
     with pytest.raises(IntegrityError):
         db.session.commit()
     db.session.rollback()

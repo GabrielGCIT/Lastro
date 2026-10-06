@@ -10,6 +10,7 @@ equipamento preso em campo, punindo o inventário para cobrar um acessório.
 import pytest
 
 from app import db
+from app.startup import NOME_EMPRESA
 from app.complementos import (conferir_devolucao, em_campo_da_movimentacao,
                               ler_conferencias_do_form, pendencias_do_coletor)
 from app.models import (CategoriaComplemento, EstoqueComplemento, ItemComplementar,
@@ -24,7 +25,7 @@ def emprestimo(app, loc):
     from types import SimpleNamespace
     from werkzeug.security import generate_password_hash
 
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     bat = CategoriaComplemento(empresa_id=mb.id, nome='BATERIA SECO',
                                controle=COMPLEMENTO_QUANTIDADE,
                                camara_atendida=COMPLEMENTO_CAMARA_SECO, e_bateria=True)

@@ -25,7 +25,7 @@ def test_sem_database_url_o_banco_e_um_arquivo_em_instance(monkeypatch):
     aplicacao = pacote_app.create_app()
     uri = aplicacao.config['SQLALCHEMY_DATABASE_URI']
     assert uri.startswith('sqlite:///')
-    assert uri.endswith('instance/mbassets.db')
+    assert uri.endswith('instance/lastro.db')
 
 
 def test_secret_key_e_gerada_uma_vez_e_reaproveitada(monkeypatch, tmp_path):
@@ -153,7 +153,7 @@ def test_login_abre_sem_sessao(client):
     """O critério da L0, do jeito que o usuário vê: a tela de login responde e
     puxa o estilo local."""
     html = client.get('/login').get_data(as_text=True)
-    assert 'MBAssets' in html
+    assert 'Lastro' in html
     assert '/static/vendor/bootstrap-5.3.0/css/bootstrap.min.css' in html
 
 

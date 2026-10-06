@@ -22,13 +22,14 @@ import pytest
 from sqlalchemy import event
 
 from app import db
+from app.startup import NOME_EMPRESA
 from app.models import Colaborador, Coletor, Empresa, Movimentacao
 
 
 @pytest.fixture()
 def movimentacoes(app, loc):
     """10 movimentações encerradas, cada uma de um colaborador diferente."""
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     agora = datetime.now()
     for i in range(10):
         c = Coletor(serial_number=f'SNH{i:03d}', numero_patrimonio=f'9{i:02d}',

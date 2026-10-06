@@ -1,7 +1,7 @@
 """
 Inicialização do banco: schema e seeds.
 
-O banco do MBAssets sempre nasce novo — não existe base legada para migrar. Por
+O banco do Lastro sempre nasce novo — não existe base legada para migrar. Por
 isso o schema inteiro vem do `db.create_all()` (models.py é a fonte da verdade,
 com constraints nomeadas lá) e este arquivo cuida só dos seeds.
 
@@ -21,9 +21,16 @@ from sqlalchemy import text
 from app import db
 
 
-# Nome da empresa da instalação. O `empresa_id` continua em todas as tabelas
-# (ver a docstring de Empresa em models.py); com uma empresa só, ele é invisível.
-NOME_EMPRESA = 'Martin Brower'
+# Nome da empresa da instalação, usado até alguém informar o verdadeiro no
+# primeiro acesso. O `empresa_id` continua em todas as tabelas (ver a docstring
+# de Empresa em models.py); com uma empresa só, ele é invisível.
+#
+# 🔴 Genérico de propósito. Antes aqui estava cravado o nome de um cliente
+# específico — no código-fonte, que é entregue junto com o produto. Software que
+# nasce dizendo o nome de uma empresa parece ter sido feito sob medida para ela,
+# e isso vira argumento contra quem o escreveu. O nome real entra na instalação,
+# não no código.
+NOME_EMPRESA = 'Minha Empresa'
 
 # Tabelas com `empresa_id` direto — as que o seed_empresa vincula no primeiro boot.
 _TABELAS_EMPRESA = [

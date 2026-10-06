@@ -3,7 +3,7 @@ A página Sobre: autoria, licença e componentes.
 
 🔴 O teste que dá nome ao arquivo é `test_a_autoria_esta_na_tela`.
 
-Esta página existe por um motivo que não é técnico. O MBAssets é obra de uma
+Esta página existe por um motivo que não é técnico. O Lastro é obra de uma
 pessoa, cedida para uso de uma empresa — e as duas coisas precisam estar
 escritas DENTRO do sistema, não só num contrato que ninguém abre. Software sem
 autoria declarada vira, com o tempo, software de quem estiver usando: é assim

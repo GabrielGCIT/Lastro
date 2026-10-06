@@ -12,6 +12,7 @@ mente para menos é pior do que não existir.
 import pytest
 
 from app import db
+from app.startup import NOME_EMPRESA
 from app.complementos import (descrever_pendencia, pendencias_abertas,
                               pendencias_por_coletor)
 from app.models import (CategoriaComplemento, Coletor, Colaborador, Empresa,
@@ -30,7 +31,7 @@ def devedor(app, loc):
     from datetime import datetime
     from types import SimpleNamespace
 
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     bat = CategoriaComplemento(empresa_id=mb.id, nome='BATERIA SECO',
                                controle=COMPLEMENTO_QUANTIDADE, e_bateria=True)
     hs_cat = CategoriaComplemento(empresa_id=mb.id, nome='HEADSET',

@@ -38,7 +38,7 @@ for _folder in [UPLOAD_FOLDER, FOTO_FOLDER, CRACHA_FOLDER, INSTANCE_FOLDER]:
 # --- BANCO PADRÃO ---
 # Um arquivo dentro de instance/: sem serviço para subir antes do app e sem
 # senha. O backup do sistema é a cópia deste arquivo.
-BANCO_PADRAO = 'sqlite:///' + os.path.join(INSTANCE_FOLDER, 'mbassets.db').replace('\\', '/')
+BANCO_PADRAO = 'sqlite:///' + os.path.join(INSTANCE_FOLDER, 'lastro.db').replace('\\', '/')
 SECRET_KEY_ARQUIVO = os.path.join(INSTANCE_FOLDER, 'secret_key')
 
 
@@ -99,7 +99,7 @@ def create_app(database_url=None):
     request, context processors e handlers de erro.
 
     Sem nenhuma variável de ambiente o app sobe sozinho: banco em
-    instance/mbassets.db e SECRET_KEY guardada em instance/secret_key.
+    instance/lastro.db e SECRET_KEY guardada em instance/secret_key.
     """
     app = Flask(
         __name__,

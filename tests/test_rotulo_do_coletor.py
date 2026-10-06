@@ -17,6 +17,7 @@ dele caso a caso.
 import pytest
 
 from app import db
+from app.startup import NOME_EMPRESA
 from app.models import Coletor, Colaborador, Empresa
 
 
@@ -52,7 +53,7 @@ def test_rotulo_prefere_o_patrimonio(com_etiqueta, loc):
 
 def test_balcao_nao_diz_coletor_traco(app, admin_client, sem_etiqueta, loc):
     """🔴 O nome do arquivo, no caminho real da retirada."""
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     db.session.add(Colaborador(re='3001', nome='João da Silva', empresa_id=mb.id))
     db.session.commit()
 
@@ -98,7 +99,7 @@ def test_bateria_na_rua_diz_em_qual_coletor(app, admin_client, sem_etiqueta, loc
     from app.models import (CategoriaComplemento, Colaborador, Empresa,
                             EstoqueComplemento, COMPLEMENTO_QUANTIDADE)
 
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     cat = CategoriaComplemento(empresa_id=mb.id, nome='BATERIA PADRAO',
                                controle=COMPLEMENTO_QUANTIDADE, e_bateria=True)
     db.session.add_all([cat, Colaborador(re='3001', nome='João da Silva',
@@ -128,7 +129,7 @@ def test_historico_e_dashboard_nao_mostram_traco(app, admin_client, sem_etiqueta
     """Histórico e bloco de pendências: coletor sem coluna de serial ao lado."""
     from app.models import Colaborador, Empresa
 
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     db.session.add(Colaborador(re='3001', nome='João da Silva', empresa_id=mb.id))
     db.session.commit()
     admin_client.post('/operacao/retirar', data={

@@ -15,6 +15,7 @@ import pytest
 from werkzeug.security import generate_password_hash
 
 from app import db
+from app.startup import NOME_EMPRESA
 from app.desativacao import (ExclusaoRecusada, desativar, excluir, historico_de,
                              pode_excluir, reativar, senha_confere)
 from app.models import (Coletor, Empresa, ItemComplementar, LogAuditoria,
@@ -29,7 +30,7 @@ def cena(app, loc):
     """Um coletor virgem e um coletor com histórico."""
     from types import SimpleNamespace
 
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     virgem = Coletor(serial_number='SN-VIRGEM', numero_patrimonio='9100',
                      localidade_id=loc.id)
     usado = Coletor(serial_number='SN-USADO', numero_patrimonio='9200',
@@ -45,7 +46,7 @@ def cena(app, loc):
 def operador(app):
     """O usuário logado, com senha conhecida — a exclusão vai pedi-la."""
     ti = __import__('app.models', fromlist=['Grupo']).Grupo.query.filter_by(nome='TI').first()
-    mb = Empresa.query.filter_by(nome='Martin Brower').first()
+    mb = Empresa.query.filter_by(nome=NOME_EMPRESA).first()
     u = Usuario(nome='Operadora B6', re='6600', email='b6@teste.local',
                 senha_hash=generate_password_hash(SENHA, method='scrypt'),
                 grupo_id=ti.id, empresa_id=mb.id, nivel_acesso='GLOBAL')
