@@ -156,3 +156,94 @@ def test_o_item_entra_no_diagnostico(monkeypatch, tmp_path):
     monkeypatch.setattr('sys.platform', 'linux')
     nomes = [i['nome'] for i in diagnostico(uri, str(tmp_path))['itens']]
     assert 'Acesso pela rede' not in nomes
+
+
+# ---------------------------------------------------------------------------
+# OUTRO FIREWALL NA MÁQUINA
+# ---------------------------------------------------------------------------
+
+def _powershell(monkeypatch, saida, returncode=0):
+    monkeypatch.setattr('sys.platform', 'win32')
+    monkeypatch.setattr(subprocess, 'run',
+                        lambda *a, **k: _saida(saida, returncode))
+
+
+def test_antivirus_com_firewall_proprio_e_avisado(monkeypatch):
+    """🔴 O caso que custou duas rodadas de diagnóstico.
+
+    A porta estava liberada no firewall do Windows, o servidor no ar, o IP
+    certo — e o celular não abria. O motivo era um antivírus com firewall
+    próprio, que roda por cima e barra antes. Máquina de empresa quase sempre
+    tem um, e liberar só o do Windows não basta.
+    """
+    from app.saude import verificar_outro_firewall
+
+    _powershell(monkeypatch, 'Kaspersky\n')
+
+    item = verificar_outro_firewall()
+
+    assert item is not None, 'não avisou sobre o segundo firewall'
+    assert 'Kaspersky' in item['resumo']
+    assert '5001' in item['detalhe'], 'o aviso tem de dizer o que liberar'
+
+
+def test_o_defender_nao_conta_como_outro_firewall(monkeypatch):
+    """🔴 O Defender É o firewall do Windows.
+
+    Sem esta exceção, toda instalação ganharia um aviso dizendo para liberar a
+    porta "também" no firewall que já foi liberado — e aviso que aparece sempre
+    é aviso que ninguém lê.
+    """
+    from app.saude import verificar_outro_firewall
+
+    _powershell(monkeypatch, 'Windows Defender\n')
+
+    assert verificar_outro_firewall() is None
+
+
+def test_sem_outro_firewall_o_item_some(monkeypatch):
+    from app.saude import verificar_outro_firewall
+
+    _powershell(monkeypatch, '\n')
+
+    assert verificar_outro_firewall() is None
+
+
+def test_nome_repetido_aparece_uma_vez_so(monkeypatch):
+    """O Security Center lista o mesmo produto duas vezes (foi o que aconteceu
+    na máquina real). "Kaspersky, Kaspersky" só confunde."""
+    from app.saude import outros_firewalls
+
+    _powershell(monkeypatch, 'Kaspersky\nKaspersky\n')
+
+    assert outros_firewalls() == ['Kaspersky']
+
+
+def test_consulta_que_falha_nao_inventa_aviso(monkeypatch):
+    from app.saude import outros_firewalls
+
+    _powershell(monkeypatch, '', returncode=1)
+
+    assert outros_firewalls() == []
+
+
+def test_o_aviso_do_outro_firewall_chega_na_TELA(monkeypatch, tmp_path):
+    """🔴 Função certa que não é chamada é função que não existe.
+
+    Descobri sabotando: removi a chamada do `diagnostico` e todos os testes
+    desta seção continuaram verdes, porque exercitavam a função isolada. O
+    aviso tem de aparecer na tela, que é onde alguém vai lê-lo.
+    """
+    import sqlite3
+
+    from app.saude import diagnostico
+
+    banco = tmp_path / 'lastro.db'
+    con = sqlite3.connect(str(banco))
+    con.execute('CREATE TABLE x (id INTEGER)')
+    con.close()
+
+    _powershell(monkeypatch, 'Kaspersky\n')
+    nomes = [i['nome'] for i in diagnostico(f'sqlite:///{banco}', str(tmp_path))['itens']]
+
+    assert 'Outro firewall instalado' in nomes

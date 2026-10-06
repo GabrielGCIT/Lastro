@@ -287,6 +287,65 @@ def _ha_regra_tcp(saida_netsh, porta):
     return False
 
 
+def outros_firewalls():
+    """Nomes dos firewalls de terceiros instalados nesta máquina.
+
+    🔴 Existe por causa de um caso real que custou duas rodadas de diagnóstico:
+    a porta estava liberada no firewall do Windows, o servidor no ar, o IP
+    certo — e o celular não abria. O motivo era um antivírus com firewall
+    próprio (Kaspersky), que roda por cima do Windows e barra antes.
+
+    Isso importa muito para instalação em empresa: máquina corporativa quase
+    sempre tem antivírus com firewall, e liberar só o do Windows não basta. Sem
+    este aviso, a conclusão de quem instala é "o sistema não funciona na rede".
+
+    Lista vazia quando não há outro firewall, ou quando não dá para perguntar.
+    """
+    import sys
+
+    if not sys.platform.startswith('win'):
+        return []
+    try:
+        import subprocess
+        # O Security Center conhece os produtos registrados. Consultado por
+        # linha de comando para não exigir biblioteca extra no pacote.
+        saida = subprocess.run(
+            ['powershell', '-NoProfile', '-Command',
+             "Get-CimInstance -Namespace root/SecurityCenter2 "
+             "-ClassName FirewallProduct | "
+             "Select-Object -ExpandProperty displayName"],
+            capture_output=True, text=True, timeout=25,
+            encoding='latin-1', errors='replace')
+    except (OSError, Exception):          # noqa: BLE001
+        return []
+    if saida.returncode != 0:
+        return []
+
+    nomes = []
+    for linha in saida.stdout.splitlines():
+        nome = linha.strip()
+        # O Defender é o firewall do próprio Windows — não é "outro".
+        if nome and 'defender' not in nome.lower() and nome not in nomes:
+            nomes.append(nome)
+    return nomes
+
+
+def verificar_outro_firewall():
+    """Avisa que há um segundo firewall, que precisa ser liberado à parte."""
+    nomes = outros_firewalls()
+    if not nomes:
+        return None
+    return {
+        'nome': 'Outro firewall instalado',
+        'situacao': 'atencao',
+        'resumo': f"Esta máquina também tem {', '.join(nomes)}.",
+        'detalhe': 'Liberar a porta no firewall do Windows pode não bastar: '
+                   'um antivírus com firewall próprio barra antes. Se o sistema '
+                   'não abrir em outros aparelhos, libere a porta 5001 (TCP) '
+                   'também nele.',
+    }
+
+
 def diagnostico(uri, root_dir, agora=None):
     """Todas as verificações, mais o veredito geral.
 
@@ -302,6 +361,9 @@ def diagnostico(uri, root_dir, agora=None):
     rede = verificar_acesso_pela_rede()
     if rede:                       # None = não dá para perguntar; não inventa
         itens.append(rede)
+    outro = verificar_outro_firewall()
+    if outro:                      # só aparece quando há mesmo outro firewall
+        itens.append(outro)
     situacoes = [i['situacao'] for i in itens]
     if 'erro' in situacoes:
         geral = 'erro'
